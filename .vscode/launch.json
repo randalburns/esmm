@@ -6,15 +6,18 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${fileDirname}/${fileBasenameNoExtension}",
-            "args": [],
+            "args": ["-g",
+            "${fileDirname}/*.cpp",
+            "-o",
+            "${fileDirname}/${fileBasenameNoExtension}"],
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],
             "externalConsole": false,
             "MIMode": "lldb",
             "preLaunchTask": "C/C++: g++-14 build active file",
-            "console": "internalConsole", 
-            "outputCapture": "std",
-        }
+            "console": "internalConsole",
+            "outputCapture": "std"
+        },
     ]
 }
