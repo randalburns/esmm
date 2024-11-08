@@ -47,6 +47,52 @@ void testSquare()
     printMatrix<rows, columns>(C);
 }
 
+void testSquare_unrolled()
+{
+    // Define 4x4 matrices A and B, and an output matrix C
+
+    constexpr int rows = 4;
+    constexpr int columns = 4;
+    constexpr int inners = 4;
+
+     // Initialize matrices A and B with some values
+    float A[rows * inners] = {1.0, 2.0, 3.0, 4.0,
+                              2.0, 3.0, 4.0, 5.0,
+                              3.0, 4.0, 5.0, 6.0,
+                              4.0, 5.0, 6.0, 7.0};
+
+    float B[inners * columns] = {1.0, 2.0, 3.0, 4.0,
+                                  2.0, 3.0, 4.0, 5.0,
+                                  3.0, 4.0, 5.0, 6.0,
+                                  4.0, 5.0, 6.0, 7.0};
+
+    float C[rows * columns];
+    zeroMatrix<rows,columns>(C);
+    // Call the baseMM function to multiply A and B, storing the result in C
+    baseMM<rows, columns, inners>(A, B, C);
+    printMatrix<rows, columns>(C);
+
+    zeroMatrix<rows,columns>(C);
+    tiledMM_unroll4<rows, columns, inners, 1, 4, 1>(A, B, C);
+    printMatrix<rows, columns>(C);
+
+    zeroMatrix<rows,columns>(C);
+    tiledMM_unroll4<rows, columns, inners, 2, 4, 2>(A, B, C);
+    printMatrix<rows, columns>(C);
+
+    zeroMatrix<rows,columns>(C);
+    tiledMM_unroll4<rows, columns, inners, 4, 4, 4>(A, B, C);
+    printMatrix<rows, columns>(C);
+
+    zeroMatrix<rows,columns>(C);
+    tiledMM_unroll4<rows, columns, inners, 2, 4, 4>(A, B, C);
+    printMatrix<rows, columns>(C);
+
+    zeroMatrix<rows,columns>(C);
+    tiledMM_unroll4<rows, columns, inners, 4, 4, 2>(A, B, C);
+    printMatrix<rows, columns>(C);
+}
+
 void testRect()
 {
     // Define 4x4 matrices with 2 inners
@@ -129,6 +175,8 @@ void testRect2()
 int main()
 {
     testSquare();
+    printf("\n\n UNROLLED \n\n");
+    testSquare_unrolled();
  //   testRect();
  //   testRect2();
 
