@@ -127,7 +127,6 @@ inline void tiledMM_unroll4(const float *A, const float *B, float *C)
 template <int rows, int columns>
 inline void printMatrix (float *mat)
 {
-    std::cout << "Result matrix C:" << std::endl;
     for (int row = 0; row < rows; row++)
     {
         for (int col = 0; col < columns; col++)
