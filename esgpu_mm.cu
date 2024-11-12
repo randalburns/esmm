@@ -3,6 +3,46 @@
 #include <cassert>
 #include "esmm_cpu.h"
 
+__global__ void esmm_Btile (int rows, int cols, int inners, const float *A,
+                           const float *B, float *C)
+{
+    // Each thread computes a row of B
+    int rBidx = blockIdx.x * blockDim.x + threadIdx.x;
+
+
+        for (int rowoff = 0; rowoff < rTileSize; rowoff++)
+        {
+            for (int inneroff = 0; inneroff < iTileSize; inneroff++)
+            {
+                int row = rTileOff + rowoff;
+                int inner = iTileOff + inneroff;
+
+                // Unrolled coloff loop with columns == 4
+                C[row * columns + (cTileOff + 0)] += A[row * inners + inner] * B[inner * columns + (cTileOff + 0)];
+                C[row * columns + (cTileOff + 1)] += A[row * inners + inner] * B[inner * columns + (cTileOff + 1)];
+                C[row * columns + (cTileOff + 2)] += A[row * inners + inner] * B[inner * columns + (cTileOff + 2)];
+                C[row * columns + (cTileOff + 3)] += A[row * inners + inner] * B[inner * columns + (cTileOff + 3)];
+            }
+        }
+    
+    int arow=0;
+    float tmp = 0.0;
+    for (; arow < rows; arow++)
+    {
+	int bcol=0;
+    	for (; bcol < cols; bcol++)
+	{
+		// A
+	//	C[rBidx*rows + bcol] = A[rBidx * rows + bcol]; 
+		// B T
+	//	C[rBidx*rows + bcol] = B[bcol * rows + rBidx]; 
+		// A dot BT
+		C[rBidx*rows + bcol] = A[rBidx * rows + bcol] + B[bcol * rows + rBidx]; 
+	}
+    }
+     
+
+}
 __global__ void esmm_naive(int rows, int cols, int inners, const float *A,
                            const float *B, float *C)
 {
@@ -80,7 +120,9 @@ int main() {
     printf("\n Output \n\n");
 
     // Launch kernel
-    esmm_naive<<<gridDim, blockDim>>>(rows, columns, inners, d_A, d_B, d_C);
+    //esmm_naive<<<gridDim, blockDim>>>(rows, columns, inners, d_A, d_B, d_C);
+    esmm_Btile<<<1, 4>>>(rows, columns, inners, d_A, d_B, d_C);
+
 
     // Copy result from device to host
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
