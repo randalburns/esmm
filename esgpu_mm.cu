@@ -142,7 +142,8 @@ int main() {
     // Launch kernel
     //esmm_nogrid<<<1, 4>>>(rows, inners, columns, d_A, d_B, d_C);
     //esmm_tile<<<dim3(1,1,1), dim3(1,1,4)>>>(rows, inners, columns, 4, 4, d_A, d_B, d_C);
-    esmm_tile<<<dim3(2,2,1), dim3(1,1,4)>>>(rows, inners, columns, 2, 2, d_A, d_B, d_C);
+    //esmm_tile<<<dim3(2,2,1), dim3(1,1,4)>>>(rows, inners, columns, 2, 2, d_A, d_B, d_C);
+    esmm_tile<<<dim3(4,4,1), dim3(1,1,4)>>>(rows, inners, columns, 1, 1, d_A, d_B, d_C);
     
     // Copy result from device to host
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
