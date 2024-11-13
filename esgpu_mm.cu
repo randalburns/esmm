@@ -3,47 +3,55 @@
 #include <cassert>
 #include "esmm_cpu.h"
 
-__global__ void esmm_Btile (int rows, int cols, int inners, const float *A,
+
+__global__ void esmm_nogrid (int rows, int inners, int columns, const float *A,
                            const float *B, float *C)
 {
-    // Each thread computes a row of B
-    int rBidx = blockIdx.x * blockDim.x + threadIdx.x;
+    int rTileOff = 0;
+    int iTileOff = 0;
+    int cTileOff = 0;
 
+    int rTileSize = 4;
+    int iTileSize = 4;
 
-        for (int rowoff = 0; rowoff < rTileSize; rowoff++)
-        {
-            for (int inneroff = 0; inneroff < iTileSize; inneroff++)
-            {
-                int row = rTileOff + rowoff;
-                int inner = iTileOff + inneroff;
-
-                // Unrolled coloff loop with columns == 4
-                C[row * columns + (cTileOff + 0)] += A[row * inners + inner] * B[inner * columns + (cTileOff + 0)];
-                C[row * columns + (cTileOff + 1)] += A[row * inners + inner] * B[inner * columns + (cTileOff + 1)];
-                C[row * columns + (cTileOff + 2)] += A[row * inners + inner] * B[inner * columns + (cTileOff + 2)];
-                C[row * columns + (cTileOff + 3)] += A[row * inners + inner] * B[inner * columns + (cTileOff + 3)];
-            }
-        }
-    
-    int arow=0;
-    float tmp = 0.0;
-    for (; arow < rows; arow++)
+    for (int rowoff = 0; rowoff < rTileSize; rowoff++)
     {
-	int bcol=0;
-    	for (; bcol < cols; bcol++)
-	{
-		// A
-	//	C[rBidx*rows + bcol] = A[rBidx * rows + bcol]; 
-		// B T
-	//	C[rBidx*rows + bcol] = B[bcol * rows + rBidx]; 
-		// A dot BT
-		C[rBidx*rows + bcol] = A[rBidx * rows + bcol] + B[bcol * rows + rBidx]; 
-	}
-    }
-     
+        for (int inneroff = 0; inneroff < iTileSize; inneroff++)
+        {
+            int row = rTileOff + rowoff;
+            int inner = iTileOff + inneroff;
 
+            // Unrolled coloff loop with columns == number threads
+            C[row * columns + (cTileOff + threadIdx.x)] += A[row * inners + inner] * B[inner * columns + (cTileOff + threadIdx.x)];
+
+        }
+    }
 }
-__global__ void esmm_naive(int rows, int cols, int inners, const float *A,
+
+__global__ void esmm_tile (int rows, int inners, int columns, 
+				int rTileSize, int iTileSize, 
+				const float *A, const float *B, float *C)
+{
+    int rTileOff = blockIdx.x * rTileSize;
+    int iTileOff = blockIdx.y * iTileSize;
+    int cTileOff = blockIdx.z * blockDim.z; 
+
+    for (int rowoff = 0; rowoff < rTileSize; rowoff++)
+    {
+        for (int inneroff = 0; inneroff < iTileSize; inneroff++)
+        {
+            int row = rTileOff + rowoff;
+            int inner = iTileOff + inneroff;
+
+            // Unrolled coloff loop with columns == number threads
+            //C[row * columns + (cTileOff + threadIdx.z)] += A[row * inners + inner] * B[inner * columns + (cTileOff + threadIdx.z)];
+            atomicAdd(&C[row * columns + (cTileOff + threadIdx.z)], A[row * inners + inner] * B[inner * columns + (cTileOff + threadIdx.z)]);
+
+        }
+    }
+}
+
+__global__ void esmm_naive(int rows, int inners, int columns, const float *A,
                            const float *B, float *C)
 {
     // compute position in C that this thread is responsible for
@@ -57,16 +65,16 @@ __global__ void esmm_naive(int rows, int cols, int inners, const float *A,
     {
 	  // sums that work as a test/placeholder
           // Row of A
-          //tmp += A[xidx * cols + i]; 
+          //tmp += A[xidx * columns + i]; 
           // Col of B
           // tmp += B[i * inners + yidx]; 
 	  // Row of A  Col of B Sum
-          // tmp += A[xidx * cols + i] + B[i * inners + yidx]; 
+          // tmp += A[xidx * columns + i] + B[i * inners + yidx]; 
 
 	  // Multiply works on full grid
-          tmp += A[xidx * cols + i] * B[i * inners + yidx]; 
+          tmp += A[xidx * columns + i] * B[i * inners + yidx]; 
     }
-    C[xidx * cols + yidx] = tmp;
+    C[xidx * columns + yidx] = tmp;
 }
 
 int main() {
@@ -92,7 +100,6 @@ int main() {
                               4.0, 4.2, 4.4, 4.6};
 	    
     float C[rows * columns];
-    zeroMatrix<rows,columns>(C);
     
     dim3 gridDim(1,1);
     dim3 blockDim(4,4);
@@ -112,21 +119,35 @@ int main() {
     cudaMemcpy(d_A, A, Asize, cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, B, Bsize, cudaMemcpyHostToDevice);
 
-    printf("\n A \n\n");
-    printMatrix<rows, columns>(A);
-    printf("\n B \n\n");
-    printMatrix<rows, columns>(B);
+    // Zero target data
+    cudaMemset(d_C, 0, Csize);
 
-    printf("\n Output \n\n");
+//    printf("\n A \n\n");
+//    printMatrix<rows, columns>(A);
+//    printf("\n B \n\n");
+//    printMatrix<rows, columns>(B);
+
 
     // Launch kernel
-    //esmm_naive<<<gridDim, blockDim>>>(rows, columns, inners, d_A, d_B, d_C);
-    esmm_Btile<<<1, 4>>>(rows, columns, inners, d_A, d_B, d_C);
-
+    esmm_naive<<<gridDim, blockDim>>>(rows, inners, columns, d_A, d_B, d_C);
 
     // Copy result from device to host
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Base \n\n");
+    printMatrix<rows, columns>(C);
 
+    // Zero target matrix
+    cudaMemset(d_C, 0, Csize);
+
+    // Launch kernel
+    //esmm_nogrid<<<1, 4>>>(rows, inners, columns, d_A, d_B, d_C);
+    //esmm_tile<<<dim3(1,1,1), dim3(1,1,4)>>>(rows, inners, columns, 4, 4, d_A, d_B, d_C);
+    esmm_tile<<<dim3(2,2,1), dim3(1,1,4)>>>(rows, inners, columns, 2, 2, d_A, d_B, d_C);
+    
+    // Copy result from device to host
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+
+    printf("\n Threaded \n\n");
     printMatrix<rows, columns>(C);
 
     // Free device memory
