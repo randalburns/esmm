@@ -1,4 +1,5 @@
 #include "esmm_gpu.h"
+#include "esmm_cpu.h"
 
 int main() {
 
@@ -6,7 +7,7 @@ int main() {
     constexpr int rows = 4;
     constexpr int columns = 4;
     constexpr int inners = 4;
-t 
+
     size_t Asize = rows * inners * sizeof(float);
     size_t Bsize = inners * columns * sizeof(float);
     size_t Csize = rows * columns * sizeof(float);
