@@ -77,10 +77,11 @@ int main() {
     cudaMemset(d_C, 0, Csize);
 
     // Launch kernel
-    //esmm_nogrid<<<1, 4>>>(rows, inners, columns, d_A, d_B, d_C);
-    esmm_tile<<<dim3(1,1,1), dim3(4)>>>(rows, columns, inners, 4, 4, d_A, d_B, d_C);
-//    esmm_tile<<<dim3(2,2,1), dim3(4)>>>(rows, columns, inners, 2, 2, d_A, d_B, d_C);
+    //esmm_Btile<<<dim3(1,1), dim3(4)>>>(rows, columns, inners, 4, 4, d_A, d_B, d_C);
+    //esmm_Btile<<<dim3(2,2), dim3(2)>>>(rows, columns, inners, 2, 2, d_A, d_B, d_C);
     
+//   esmm_Btile_noatomic<<<dim3(1,1), dim3(4)>>>(rows, columns, inners, 4, 4, d_A, d_B, d_C);
+    esmm_Btile_noatomic<<<dim3(2,2), dim3(2)>>>(rows, columns, inners, 2, 2, d_A, d_B, d_C);
     // Copy result from device to host
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
 
@@ -101,7 +102,6 @@ int main() {
     printMatrix<rows, columns>(C);
 
 */
-
     // Free device memory
     cudaFree(d_A);
     cudaFree(d_B);
