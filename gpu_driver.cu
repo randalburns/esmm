@@ -80,12 +80,24 @@ int main() {
     //esmm_Btile<<<dim3(1,1), dim3(4)>>>(rows, columns, inners, 4, 4, d_A, d_B, d_C);
     //esmm_Btile<<<dim3(2,2), dim3(2)>>>(rows, columns, inners, 2, 2, d_A, d_B, d_C);
     
-//   esmm_Btile_noatomic<<<dim3(1,1), dim3(4)>>>(rows, columns, inners, 4, 4, d_A, d_B, d_C);
-    esmm_Btile_noatomic<<<dim3(2,2), dim3(2)>>>(rows, columns, inners, 2, 2, d_A, d_B, d_C);
+   esmm_Btile_noatomic<<<dim3(1,1), dim3(4)>>>(rows, columns, inners, 4, 4, d_A, d_B, d_C);
+//    esmm_Btile_noatomic<<<dim3(2,2), dim3(2)>>>(rows, columns, inners, 2, 2, d_A, d_B, d_C);
     // Copy result from device to host
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
 
     printf("\n Tiled \n\n");
+    printMatrix<rows, columns>(C);
+
+    // Zero target matrix
+    cudaMemset(d_C, 0, Csize);
+
+    // Launch kernel
+    esmm_Btile_shmem<<<dim3(1,1), dim3(4), 3*4*4*sizeof(float)>>>(rows, columns, inners, 4, 4, d_A, d_B, d_C);
+    
+    // Copy result from device to host
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+
+    printf("\n Shmem \n\n");
     printMatrix<rows, columns>(C);
 
 /* 
