@@ -98,13 +98,23 @@ __global__ void esmm_Btile_shmem (int  rows, int columns, int inners,
     extern __shared__ float sArea [];
     float* sA = sArea;
     float* sB = sArea + iTileSize * rows;  // will have to tile rows later
-    float* sC = sB + iTileSize * blockDim.z;
+    float* sC = sB + iTileSize * blockDim.x;
 
     // are there good shared memory loading patterns?
+    //   test thread continguous versus thread loop
     
     // Load shared memory for A
+    //   this assumes that a full warp is being load, no check on
+    //      if (threadIdx.x < iTileSize)
+    //
+    // Each thread is loading a columns of inners, i.e. row x inners in A
+    for (int rowoff=0; rowoff < rows; rowoff++)
+    {
+        sA[rowoff * iTileSize + threadIdx.x] = A[rowoff * inners + iTileOff + threadIdx.x];
+    }
 
     // Load shared memory for B. Each thread loads cTileSize elements of B
+    //  each thread is loading a row of inners in B, i.e. inners x cols in B
     for (int coloff = 0; coloff < cTileSize; coloff++)
     {
       int col = cTileOff + coloff;
@@ -117,11 +127,20 @@ __global__ void esmm_Btile_shmem (int  rows, int columns, int inners,
 
     __syncthreads();
 
-    // Check contents of shared memory
-    for (int coloff = 0; coloff < cTileSize; coloff++)
+    // Check contents of shared memory A
+    /*for (int rowoff = 0; rowoff < rows; rowoff++)
+    {
+      C[rowoff * iTileSize + threadIdx.x] = sA[rowoff * iTileSize + threadIdx.x];
+    }*/
+
+    // Check contents of shared memory B
+    /* for (int coloff = 0; coloff < cTileSize; coloff++)
     {
       C[threadIdx.x * cTileSize + coloff] = sB[threadIdx.x * cTileSize + coloff];
-    }
+    } */
+
+
+
 }    
 
 
