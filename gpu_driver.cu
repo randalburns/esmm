@@ -28,11 +28,6 @@ int main() {
     dim3 gridDim(1,1);
     dim3 blockDim(4,4);
 
-    // create as many blocks as necessary to map all of C
-    // dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32), 1);
-    // 32 * 32 = 1024 thread per block
-    // dim3 blockDim(32, 32, 1);
-	
     // Allocate device memory
     float *d_A, *d_B, *d_C;
     cudaMalloc((void **)&d_A, Asize);
@@ -46,12 +41,6 @@ int main() {
     // Zero target data
     cudaMemset(d_C, 0, Csize);
 
-//    printf("\n A \n\n");
-//    printMatrix<rows, columns>(A);
-//    printf("\n B \n\n");
-//    printMatrix<rows, columns>(B);
-
-
     // Launch kernel
     esmm_naive<<<gridDim, blockDim>>>(rows, columns, inners, d_A, d_B, d_C);
 
@@ -60,22 +49,75 @@ int main() {
     printf("\n Base \n\n");
     printMatrix<rows, columns>(C);
 
-    // Zero target matrix
+    // Sequential
     cudaMemset(d_C, 0, Csize);
-
-    // Launch kernel
     esmm_sequential<<<gridDim, blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
-    //esmm_sequential<<<dim3(2,2), 4>>>(rows, inners, columns, 2, d_A, d_B, d_C);
-
-    // Copy result from device to host
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     printf("\n Sequential \n\n");
     printMatrix<rows, columns>(C);
 
-
-    // Zero target matrix
+    // Sequential tiled
     cudaMemset(d_C, 0, Csize);
+    esmm_sequential<<<gridDim, blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Sequential tiled \n\n");
+    printMatrix<rows, columns>(C);
 
+    // i tiled
+    cudaMemset(d_C, 0, Csize);
+    esmm_itile<<<gridDim, blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, 4, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Sequential I tiled \n\n");
+    printMatrix<rows, columns>(C);
+
+    // i tiled
+    cudaMemset(d_C, 0, Csize);
+    esmm_itile<<<gridDim, blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, 2, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Sequential I tiled \n\n");
+    printMatrix<rows, columns>(C);
+
+    return;
+
+    // Btile_Ithreads
+    cudaMemset(d_C, 0, Csize);
+    esmm_base<<<dim3(1,1), dim3(4)>>>(rows, columns, inners, 4, 4, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n esmm base\n\n");
+    printMatrix<rows, columns>(C);
+
+    // Btile_Ithreads_tiled
+    cudaMemset(d_C, 0, Csize);
+    esmm_base<<<dim3(2,2), dim3(2)>>>(rows, columns, inners, 2, 2, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n esmm base tiled \n\n");
+    printMatrix<rows, columns>(C);
+
+    //  decluster writes
+    cudaMemset(d_C, 0, Csize);
+    esmm_base_noatomic<<<dim3(1,1), dim3(4)>>>(rows, columns, inners, 4, 4, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n esmm base tiled noatomic \n\n");
+    printMatrix<rows, columns>(C);
+
+    // shared memory
+    zeroMatrix<rows,columns>(C);
+    cudaMemset(d_C, 0, Csize);
+    //esmm_shmem<<<dim3(1,1), dim3(4), 2*4*4*sizeof(float)>>>(rows, columns, inners, 4, 4, d_A, d_B, d_C);
+    esmm_shmem<<<dim3(2,2), dim3(2), 2*4*4*sizeof(float)>>>(rows, columns, inners, 2, 2, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n esmm shmem \n\n");
+    printMatrix<rows, columns>(C);
+
+    // Free device memory
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
+
+    return 0;
+}
+
+/*
     // Launch kernel
     //esmm_Btile<<<dim3(1,1), dim3(4)>>>(rows, columns, inners, 4, 4, d_A, d_B, d_C);
     //esmm_Btile<<<dim3(2,2), dim3(2)>>>(rows, columns, inners, 2, 2, d_A, d_B, d_C);
@@ -100,7 +142,7 @@ int main() {
     printf("\n Shmem \n\n");
     printMatrix<rows, columns>(C);
 
-/* 
+ 
     // Zero target matrix
     cudaMemset(d_C, 0, Csize);
 
@@ -114,10 +156,4 @@ int main() {
     printMatrix<rows, columns>(C);
 
 */
-    // Free device memory
-    cudaFree(d_A);
-    cudaFree(d_B);
-    cudaFree(d_C);
 
-    return 0;
-}
