@@ -38,9 +38,9 @@ __global__ void esmm_sequential (int  rows, int columns, int inners, int blocksi
 }
 
 // blocks of B that access all row.  we will need to shrink at some point for shmem
-__global__ void esmm_Btile (int rows, int columns, int inners, 
-				int cTileSize, int iTileSize, 
-				const float *A, const float *B, float *C)
+__global__ void esmm_Btile(int rows, int columns, int inners,
+                           int cTileSize, int iTileSize,
+                           const float *A, const float *B, float *C)
 {
     int iTileOff = blockIdx.x * iTileSize;
     int cTileOff = blockIdx.y * cTileSize;
@@ -50,15 +50,16 @@ __global__ void esmm_Btile (int rows, int columns, int inners,
         for (int coloff = 0; coloff < cTileSize; coloff++)
         {
             int col = cTileOff + coloff;
-	    int inner = iTileOff + threadIdx.x;
+            int inner = iTileOff + threadIdx.x;
 
-	    // RB atomic adds needed to prevent races.
+            // RB atomic adds needed to prevent races.
             atomicAdd(&C[row * columns + col], A[row * inners + inner] * B[inner * columns + col]);
-	}
+        }
     }
 }
 
-
+// RB TODO verify RR cols creates problems at thread > 8
+// RB TODO consider RR rows instead of columns
 // add shared memory to staggered version
 __global__ void esmm_Btile_noatomic (int rows, int columns, int inners, 
 				int cTileSize, int iTileSize, 
@@ -72,15 +73,14 @@ __global__ void esmm_Btile_noatomic (int rows, int columns, int inners,
         for (int coloff = 0; coloff < cTileSize; coloff++)
         {
             int col = cTileOff + (coloff + threadIdx.x) % cTileSize;
-	    int inner = iTileOff + threadIdx.x;
+            int inner = iTileOff + threadIdx.x;
 
-	    // each kernel launch is fine.  multiple concurrent is not.
-            //atomicAdd(&C[row * columns + col], A[row * inners + inner] * B[inner * columns + col]);
+            // each kernel launch is fine.  multiple concurrent is not.
+            // atomicAdd(&C[row * columns + col], A[row * inners + inner] * B[inner * columns + col]);
             C[row * columns + col] += A[row * inners + inner] * B[inner * columns + col];
-	}
+        }
     }
 }
-
 
 __global__ void esmm_Btile_shmem (int  rows, int columns, int inners, 
 				int cTileSize, int iTileSize, 
