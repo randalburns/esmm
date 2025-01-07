@@ -22,7 +22,7 @@ __global__ void esmm_naive(int rows, int columns, int inners, const float *A,
 // only for square blocks
 // grid still 2d
 // launch 4x4 kernel as 16, blocksize = 4	
-__global__ void esmm_sequential (int  rows, int columns, int inners, int blocksize, 
+__global__ void esmm_sequential (int rows, int columns, int inners, int blocksize, 
 					const float *A, const float *B, float *C)
 {
     // change iteration order to output sequentially
@@ -34,8 +34,49 @@ __global__ void esmm_sequential (int  rows, int columns, int inners, int blocksi
     {
           tmp += A[row * inners + i] * B[i * columns + col]; 
     }
-    C[row * columns + col] += tmp;
+    C[row * columns + col] = tmp;
 }
+
+__global__ void esmm_sequential_shmem (int rows, int columns, int inners, int blocksize, 
+					const float *A, const float *B, float *C)
+{
+    // change iteration order to output sequentially
+    const int row = blockIdx.x * blocksize + (threadIdx.x / blocksize);
+    const int col = blockIdx.y * blocksize + (threadIdx.x % blocksize);
+
+    int rowoff = row % blocksize;
+    int coloff = col % blocksize;
+
+    extern __shared__ float sArea [];
+    float* sA = sArea;  
+    float* sB = sArea + blocksize * blocksize; 
+
+    float tmp = 0.0;
+
+    // for a block of A and B
+    for (int inner=0; inner < inners; inner += blocksize)
+    {
+	// Load block of A and B into shared memory
+        sA[rowoff * blocksize + coloff] = A[row * inners + inner + col];
+        sB[rowoff * blocksize + coloff] = B[inner * columns + col];
+	__syncthreads();
+
+// check shmem load
+//        C[row * columns + coloff] = sB[rowoff * blocksize + coloff];
+
+        for (int i=0; i < blocksize; ++i)
+        {
+        //    tmp += sA[rowoff * blocksize + i] * sB[i * blocksize + coloff]; 
+            tmp += A[row * inners + i] * B[i * columns + col]; 
+	}
+        __syncthreads();
+    }
+
+
+    C[row * columns + col] = tmp;
+    return;
+}
+
 
 // each thread is an output element of C
 __global__ void esmm_itile (int rows, int columns, int inners,
@@ -45,7 +86,7 @@ __global__ void esmm_itile (int rows, int columns, int inners,
     // change iteration order to output sequentially
     const int row = blockIdx.x * blocksize + (threadIdx.x / blocksize);
     const int col = blockIdx.y * blocksize + (threadIdx.x % blocksize);
-
+    
     for (int itile=0; itile < inners / iTileSize; itile++)
     {
         float tmp = 0.0;
@@ -56,20 +97,43 @@ __global__ void esmm_itile (int rows, int columns, int inners,
         }
         C[row * columns + col] += tmp;
     }
+}
 
-/*    // change iteration order to output sequentially
-    //   are the dims correct if not square?
+/*
+// shared memory 
+__global__ void esmm_shmem (int rows, int columns, int inners,
+                           int blocksize, int iTileSize,
+                           const float *A, const float *B, float *C)
+{
+    // change iteration order to output sequentially
     const int row = blockIdx.x * blocksize + (threadIdx.x / blocksize);
     const int col = blockIdx.y * blocksize + (threadIdx.x % blocksize);
+    
 
-    float tmp = 0.0;
-    for (int i=0; i < inners; ++i)
+    // RB for now assume only one A tile.
+    // Shared memory regions
+    // A rTileSize x iTileSize
+    // B iTileSize x cTileSize
+    // C rTileSize x cTileSize
+    
+    extern __shared__ float sArea [];
+    float* sB = sArea;  
+    float* sC = sB + blocksize * blockDim.x;
+
+    // Load shared memory for B. Each thread loads iTileSize elements of B
+    //  each thread is loading a col B
+    for (int inneroff = 0; inneroff < iTileSize; inneroff++)
     {
-          tmp += A[ridx * inners + i] * B[i * columns + cidx]; 
+      int col = cTileOff + threadIdx.x;
+      int inner = iTileOff + inneroff;
+
+      sB[inneroff * cTileSize + threadIdx.x] = B[inner * columns + col];
     }
-    C[ridx * columns + cidx] += tmp;
-    */
-}
+
+    __syncthreads();
+
+*/
+// Everything below here deprecated
 
 // Each thread is a column of inners in B.  Need to tile Rows
 __global__ void esmm_base (int rows, int columns, int inners,
@@ -118,7 +182,7 @@ __global__ void esmm_base_noatomic (int rows, int columns, int inners,
 
 
 // shared memory 
-__global__ void esmm_shmem (int rows, int columns, int inners,
+__global__ void esmm_shmem_old (int rows, int columns, int inners,
                            int cTileSize, int iTileSize,
                            const float *A, const float *B, float *C)
 {
