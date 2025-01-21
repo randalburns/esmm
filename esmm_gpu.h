@@ -37,6 +37,7 @@ __global__ void esmm_sequential (int rows, int columns, int inners, int blocksiz
     C[row * columns + col] = tmp;
 }
 
+
 __global__ void esmm_sequential_shmem (int rows, int columns, int inners, int blocksize, 
 					const float *A, const float *B, float *C)
 {
@@ -57,17 +58,10 @@ __global__ void esmm_sequential_shmem (int rows, int columns, int inners, int bl
     for (int inner=0; inner < inners; inner += blocksize)
     {
 	// Load block of A and B into shared memory
-        sA[rowoff * blocksize + coloff] = A[row * inners + inner + col];
+        sA[rowoff * blocksize + coloff] = A[row * inners + inner + coloff];
+        //sB[rowoff * blocksize + coloff] = B[(inner + rowoff) * columns + col];
         sB[rowoff * blocksize + coloff] = B[(inner + rowoff) * columns + col];
-//        C[row * columns + col] = B[(inner + rowoff) * columns + col];
-        C[row * columns + col] = coloff;
 	__syncthreads();
-
-// check shmem load
-//        C[row * columns + coloff] = sB[rowoff * blocksize + coloff];
-// check shmem load
-//        C[row * columns + coloff] = sA[rowoff * blocksize + coloff];
-//        C[row * columns + coloff] = sB[rowoff * blocksize + coloff];
 
         for (int i=0; i < blocksize; ++i)
         {
@@ -76,7 +70,7 @@ __global__ void esmm_sequential_shmem (int rows, int columns, int inners, int bl
         __syncthreads();
     }
 
-//    C[row * columns + col] = tmp;
+    C[row * columns + col] = tmp;
     return;
 }
 

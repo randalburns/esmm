@@ -13,11 +13,11 @@ int main() {
     size_t Csize = rows * columns * sizeof(float);
 
      // Initialize matrices A and B with some values
-    float A[rows * inners] = {1.0, 2.1,
-                              2.0, 2.1};
+    float A[rows * inners] = {1.0, 2.0,
+                              3.0, 4.0};
 
-    float B[inners * columns] = {1.0, 1.2,
-                                 2.0, 2.2};
+    float B[inners * columns] = {0.1, 0.2,
+                                 0.3, 0.4};
 	    
     float C[rows * columns];
     
@@ -33,6 +33,12 @@ int main() {
     // Copy data from host to device
     cudaMemcpy(d_A, A, Asize, cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, B, Bsize, cudaMemcpyHostToDevice);
+
+    printf("\n A \n\n");
+    printMatrix<rows, columns>(A);
+
+    printf("\n B \n\n");
+    printMatrix<rows, columns>(B);
 
     // Zero target data
     cudaMemset(d_C, 0, Csize);
@@ -62,7 +68,7 @@ int main() {
     // shared memory
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<2,2>(C);
-    esmm_sequential_shmem<<<dim3(1,1), dim3(2*2), 8>>>(rows, columns, inners, 2, d_A, d_B, d_C);
+    esmm_sequential_shmem<<<dim3(1,1), dim3(2*2), 2*2*2>>>(rows, columns, inners, 2, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     printf("\n Sequential shared memory -- 4x4 \n\n");
     printMatrix<rows, columns>(C);
@@ -70,7 +76,7 @@ int main() {
     // shared memory tiled
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<2,2>(C);
-    esmm_sequential_shmem<<<dim3(2,2), dim3(1*1), 2>>>(rows, columns, inners, 1, d_A, d_B, d_C);
+    esmm_sequential_shmem<<<dim3(2,2), dim3(1*1), 2*2>>>(rows, columns, inners, 1, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     printf("\n Sequential shared memory tiled -- 1x1 \n\n");
     printMatrix<rows, columns>(C);

@@ -85,8 +85,6 @@ int main() {
     // Check against CPU -- need a higher tolerance than 1e-6
     std::cout << "Base matches CPU = " << checkEqual ( rows, columns, Ccpu, Cref, 0.001 ) << std::endl;
 
-    //printMatrix<rows, columns>(Cref);
-
     // Tiled naive
     cudaMemset(d_C, 0, Csize);
     esmm_naive<<<gridDim, blockDim>>>(rows, columns, inners, d_A, d_B, d_C);
@@ -94,19 +92,20 @@ int main() {
     std::cout << "Tiled naive kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
 
-    // sequential
-    cudaMemset(d_C, 0, Csize);
-    esmm_naive<<<oneGrid, fullBlock>>>(rows, columns, inners, d_A, d_B, d_C);
-    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "One sequential kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
-    cudaMemset(d_C, 0, Csize);
-
     // tiled sequential
     cudaMemset(d_C, 0, Csize);
-    esmm_naive<<<gridDim, blockDim>>>(rows, columns, inners, d_A, d_B, d_C);
+    esmm_sequential<<<gridDim, blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "Tiled sequential kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    std::cout << "Sequential kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
+
+    // tiled shared memory
+    cudaMemset(d_C, 0, Csize);
+    esmm_sequential_shmem<<<gridDim, blockDim.x * blockDim.y, 2 * blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    std::cout << "Tiled shared memory kernel = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    cudaMemset(d_C, 0, Csize);
+
 
     // Free device memory
     cudaFree(d_A);
