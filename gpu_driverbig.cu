@@ -35,8 +35,16 @@ int main() {
     dim3 oneGrid(1,1);
     dim3 fullBlock(rows,columns);
 
-    dim3 gridDim(8,8);
-    dim3 blockDim(4,4);
+    dim3 gridDim(2,2);
+    dim3 blockDim(16,16);
+
+    // rectangular 2,4
+    dim3 gridDim24(2,4);
+    dim3 blockDim24(16,8);
+    
+    // rectangular 4,2
+    dim3 gridDim42(4,2);
+    dim3 blockDim42(8,16);
 
     size_t Asize = rows * inners * sizeof(float);
     size_t Bsize = inners * columns * sizeof(float);
@@ -97,6 +105,20 @@ int main() {
     esmm_sequential<<<gridDim, blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "Sequential kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    cudaMemset(d_C, 0, Csize);
+
+    // tiled not square	
+    cudaMemset(d_C, 0, Csize);
+    esmm_sequential_ns<<<gridDim24, blockDim24.x * blockDim24.y>>>(rows, columns, inners, blockDim24.x, blockDim24.y, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    std::cout << "Not square 24 kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    cudaMemset(d_C, 0, Csize);
+
+    // tiled not square	
+    cudaMemset(d_C, 0, Csize);
+    esmm_sequential_ns<<<gridDim42, blockDim42.x * blockDim42.y>>>(rows, columns, inners, blockDim42.x, blockDim42.y, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    std::cout << "Not square 42 kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
 
     // tiled shared memory

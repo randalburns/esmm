@@ -37,6 +37,23 @@ __global__ void esmm_sequential (int rows, int columns, int inners, int blocksiz
     C[row * columns + col] = tmp;
 }
 
+// same as sequential, but not squary
+__global__ void esmm_sequential_ns (int rows, int columns, int inners, 
+					int rblksz, int cblksz, 
+					const float *A, const float *B, float *C)
+{
+    // change iteration order to output sequentially
+    const int row = blockIdx.x * rblksz + (threadIdx.x / cblksz);
+    const int col = blockIdx.y * cblksz + (threadIdx.x % cblksz);
+
+    float tmp = 0.0;
+    for (int i=0; i < inners; ++i)
+    {
+          tmp += A[row * inners + i] * B[i * columns + col]; 
+    }
+    C[row * columns + col] = tmp;
+}
+
 
 __global__ void esmm_sequential_shmem (int rows, int columns, int inners, int blocksize, 
 					const float *A, const float *B, float *C)
@@ -59,7 +76,6 @@ __global__ void esmm_sequential_shmem (int rows, int columns, int inners, int bl
     {
 	// Load block of A and B into shared memory
         sA[rowoff * blocksize + coloff] = A[row * inners + inner + coloff];
-        //sB[rowoff * blocksize + coloff] = B[(inner + rowoff) * columns + col];
         sB[rowoff * blocksize + coloff] = B[(inner + rowoff) * columns + col];
 	__syncthreads();
 

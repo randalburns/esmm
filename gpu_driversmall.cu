@@ -65,6 +65,27 @@ int main() {
     printf("\n Sequential tiled -- 1x1\n\n");
     printMatrix<rows, columns>(C);
 
+    // Sequential tiled not square
+    cudaMemset(d_C, 0, Csize);
+    esmm_sequential_ns<<<dim3(2,2), dim3(1*1)>>>(rows, columns, inners, 1, 1, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Sequential not square -- 4x4\n\n");
+    printMatrix<rows, columns>(C);
+
+    // Sequential tiled not square
+    cudaMemset(d_C, 0, Csize);
+    esmm_sequential_ns<<<dim3(2,1), dim3(2)>>>(rows, columns, inners, 1, 2, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Sequential not square (2,1)(2)\n\n");
+    printMatrix<rows, columns>(C);
+
+    // Sequential tiled not square
+    cudaMemset(d_C, 0, Csize);
+    esmm_sequential_ns<<<dim3(1,2), dim3(2)>>>(rows, columns, inners, 2, 1, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Sequential not square (1,2)(2)\n\n");
+    printMatrix<rows, columns>(C);
+
     // shared memory
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<2,2>(C);
