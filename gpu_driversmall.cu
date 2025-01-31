@@ -65,6 +65,42 @@ int main() {
     printf("\n Sequential tiled -- 1x1\n\n");
     printMatrix<rows, columns>(C);
 
+    // shared memory
+    cudaMemset(d_C, 0, Csize);
+    zeroMatrix<2,2>(C);
+    esmm_sequential_shmem<<<dim3(1,1), dim3(2*2), 2*2*2>>>(rows, columns, inners, 2, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Sequential shared memory -- 4x4 \n\n");
+    printMatrix<rows, columns>(C);
+
+    // shared memory tiled
+    cudaMemset(d_C, 0, Csize);
+    zeroMatrix<2,2>(C);
+    esmm_sequential_shmem<<<dim3(2,2), dim3(1*1), 2>>>(rows, columns, inners, 1, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Sequential shared memory tiled -- 1x1 \n\n");
+    printMatrix<rows, columns>(C);
+
+    // shmem_multi
+    cudaMemset(d_C, 0, Csize);
+    zeroMatrix<2,2>(C);
+    esmm_shmem_multi<<<dim3(1,1), dim3(2*2), 2*2*2>>>(rows, columns, inners, 2, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Multi \n\n");
+    printMatrix<rows, columns>(C);
+
+    // shmem_multi tiled
+    cudaMemset(d_C, 0, Csize);
+    zeroMatrix<2,2>(C);
+    esmm_shmem_multi<<<dim3(2,2), dim3(1*1), 2>>>(rows, columns, inners, 1, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Multi tiled -- 1x1 \n\n");
+    printMatrix<rows, columns>(C);
+
+    return;
+
+
+
     // Sequential tiled not square
     cudaMemset(d_C, 0, Csize);
     esmm_sequential_ns<<<dim3(2,2), dim3(1*1)>>>(rows, columns, inners, 1, 1, d_A, d_B, d_C);
@@ -86,21 +122,63 @@ int main() {
     printf("\n Sequential not square (1,2)(2)\n\n");
     printMatrix<rows, columns>(C);
 
-    // shared memory
+    // shared memory not square
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<2,2>(C);
-    esmm_sequential_shmem<<<dim3(1,1), dim3(2*2), 2*2*2>>>(rows, columns, inners, 2, d_A, d_B, d_C);
+    esmm_shmem_ns<<<dim3(1,1), dim3(2*2), 2*2*2>>>(rows, columns, inners, 2, 2, 2, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    printf("\n Sequential shared memory -- 4x4 \n\n");
+    printf("\n Shared memory not square -- 4x4 \n\n");
     printMatrix<rows, columns>(C);
 
-    // shared memory tiled
+    // shared memory not square tiles
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<2,2>(C);
-    esmm_sequential_shmem<<<dim3(2,2), dim3(1*1), 2*2>>>(rows, columns, inners, 1, d_A, d_B, d_C);
+    esmm_shmem_ns<<<dim3(2,2), dim3(1*1), 2>>>(rows, columns, inners, 1, 1, 1, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    printf("\n Sequential shared memory tiled -- 1x1 \n\n");
+    printf("\n Shared memory not square -- 1x1 \n\n");
+    printMatrix<rows, columns>(C);
+
+    // Sequential tiled not square
+    cudaMemset(d_C, 0, Csize);
+    esmm_shmem_ns<<<dim3(2,1), dim3(2), 2*2*2>>>(rows, columns, inners, 1, 2, 2, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Sequential not square (2,1)(2)\n\n");
+    printMatrix<rows, columns>(C);
+
+    // Sequential tiled not square
+    cudaMemset(d_C, 0, Csize);
+    esmm_shmem_ns<<<dim3(1,2), dim3(2), 2*2*2>>>(rows, columns, inners, 2, 1, 2, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Sequential not square (1,2)(2)\n\n");
     printMatrix<rows, columns>(C);
 
     return;
+
+    // RB for now
+    // Sequential tiled not square
+    cudaMemset(d_C, 0, Csize);
+    esmm_shmem_ns<<<dim3(1,1), dim3(2*2), 2*2*2>>>(rows, columns, inners, 2, 2, 2, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Sequential not square (2,1)(2)\n\n");
+    printMatrix<rows, columns>(C);
+
+    // Sequential tiled not square
+    cudaMemset(d_C, 0, Csize);
+    esmm_shmem_ns<<<dim3(2,1), dim3(2), 2*2*2>>>(rows, columns, inners, 1, 2, 2, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Sequential not square (2,1)(2)\n\n");
+    printMatrix<rows, columns>(C);
+
+    return;
+
+    // Sequential tiled not square
+    cudaMemset(d_C, 0, Csize);
+    esmm_shmem_ns<<<dim3(1,2), dim3(2), 2*2*2>>>(rows, columns, inners, 2, 1, 2, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Sequential not square (1,2)(2)\n\n");
+    printMatrix<rows, columns>(C);
+
+    return;
+
+
 }
