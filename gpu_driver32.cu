@@ -29,17 +29,6 @@ int main() {
     constexpr int columns = 32;
     constexpr int inners = 32; 
      
-    dim3 gridDim(2,2);
-    dim3 blockDim(16,16);
-
-    // rectangular 2,4
-    dim3 gridDim24(2,4);
-    dim3 blockDim24(16,8);
-    
-    // rectangular 4,2
-    dim3 gridDim42(4,2);
-    dim3 blockDim42(8,16);
-
     size_t Asize = rows * inners * sizeof(float);
     size_t Bsize = inners * columns * sizeof(float);
     size_t Csize = rows * columns * sizeof(float);
@@ -48,7 +37,6 @@ int main() {
     float B[inners * columns];
     float C[rows * columns];
     float Cref[rows * columns];
-    float Ccpu[rows * columns];
     
     // Initialize A to random floating-point values between 0 and 1
     for (int row = 0; row < rows; ++row) {
@@ -64,10 +52,6 @@ int main() {
         }
     }
 
-    // baseMM on CPU
-    zeroMatrix<rows,columns>(Ccpu);
-    baseMM<rows, columns, inners>(A, B, Ccpu);
-	    
     // Allocate device memory
     float *d_A, *d_B, *d_C;
     cudaMalloc((void **)&d_A, Asize);
@@ -78,37 +62,44 @@ int main() {
     cudaMemcpy(d_A, A, Asize, cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, B, Bsize, cudaMemcpyHostToDevice);
 
-
     // Tiled naive
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<rows,columns>(Cref);
-    esmm_naive<<<gridDim, blockDim>>>(rows, columns, inners, d_A, d_B, d_C);
+    esmm_naive<<<dim3(1,1), dim3(32,32)>>>(rows, columns, inners, d_A, d_B, d_C);
     cudaMemcpy(Cref, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "Tiled naive kernel matches = " << checkEqual ( rows, columns, Ccpu, Cref ) << std::endl;
+    cudaMemset(d_C, 0, Csize);
+
+    // Tiled naive
+    cudaMemset(d_C, 0, Csize);
+    zeroMatrix<rows,columns>(C);
+    esmm_naive<<<dim3(2,2), dim3(16,16)>>>(rows, columns, inners, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    std::cout << "Naive tiled kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    cudaMemset(d_C, 0, Csize);
+     
+    // sequential
+    cudaMemset(d_C, 0, Csize);
+    zeroMatrix<rows,columns>(C);
+    esmm_sequential<<<dim3(1,1), 32*32>>>(rows, columns, inners, 32, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    std::cout << "Sequential kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
 
     // tiled sequential
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<rows,columns>(C);
-    esmm_sequential<<<gridDim, blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    esmm_sequential<<<dim3(2,2), 16*16>>>(rows, columns, inners, 16, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "Sequential kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    std::cout << "Sequential tiled kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
 
-    // tiled not square	
+    // shared memory
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<rows,columns>(C);
-    esmm_sequential_ns<<<gridDim24, blockDim24.x * blockDim24.y>>>(rows, columns, inners, blockDim24.x, blockDim24.y, d_A, d_B, d_C);
+    esmm_sequential_shmem<<<dim3(1,1), dim3(32*32), 32*32*2>>>(rows, columns, inners, 32, d_A, d_B, d_C);
+//    esmm_sequential_shmem<<<gridDim, blockDim.x * blockDim.y, 2 * blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "Not square 24 kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
-    cudaMemset(d_C, 0, Csize);
-
-    // tiled not square	
-    cudaMemset(d_C, 0, Csize);
-    zeroMatrix<rows,columns>(C);
-    esmm_sequential_ns<<<gridDim42, blockDim42.x * blockDim42.y>>>(rows, columns, inners, blockDim42.x, blockDim42.y, d_A, d_B, d_C);
-    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "Not square 42 kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    std::cout << "Shared memory kernel = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
 
     // tiled shared memory
@@ -119,6 +110,8 @@ int main() {
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "Tiled shared memory kernel = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
+     
+    return;
 
     // multi
     cudaMemset(d_C, 0, Csize);
