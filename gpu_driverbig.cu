@@ -86,6 +86,7 @@ int main() {
 
     // Whole matrix in one kernel -- this is reference Cref
     cudaMemset(d_C, 0, Csize);
+    zeroMatrix<rows,columns>(Cref);
     esmm_naive<<<oneGrid, fullBlock>>>(rows, columns, inners, d_A, d_B, d_C);
     cudaMemcpy(Cref, d_C, Csize, cudaMemcpyDeviceToHost);
     cudaMemset(d_C, 0, Csize);
@@ -95,6 +96,7 @@ int main() {
 
     // Tiled naive
     cudaMemset(d_C, 0, Csize);
+    zeroMatrix<rows,columns>(C);
     esmm_naive<<<gridDim, blockDim>>>(rows, columns, inners, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "Tiled naive kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
@@ -102,6 +104,7 @@ int main() {
 
     // tiled sequential
     cudaMemset(d_C, 0, Csize);
+    zeroMatrix<rows,columns>(C);
     esmm_sequential<<<gridDim, blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "Sequential kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
@@ -109,6 +112,7 @@ int main() {
 
     // tiled not square	
     cudaMemset(d_C, 0, Csize);
+    zeroMatrix<rows,columns>(C);
     esmm_sequential_ns<<<gridDim24, blockDim24.x * blockDim24.y>>>(rows, columns, inners, blockDim24.x, blockDim24.y, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "Not square 24 kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
@@ -116,6 +120,7 @@ int main() {
 
     // tiled not square	
     cudaMemset(d_C, 0, Csize);
+    zeroMatrix<rows,columns>(C);
     esmm_sequential_ns<<<gridDim42, blockDim42.x * blockDim42.y>>>(rows, columns, inners, blockDim42.x, blockDim42.y, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "Not square 42 kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
@@ -123,11 +128,27 @@ int main() {
 
     // tiled shared memory
     cudaMemset(d_C, 0, Csize);
+    zeroMatrix<rows,columns>(C);
     esmm_sequential_shmem<<<gridDim, blockDim.x * blockDim.y, 2 * blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "Tiled shared memory kernel = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
 
+    // multi
+    cudaMemset(d_C, 0, Csize);
+    zeroMatrix<rows,columns>(C);
+    esmm_shmem_multi<<<gridDim, blockDim.x, 2 * blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    std::cout << "Tiled multi matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    cudaMemset(d_C, 0, Csize);
+
+    // multi2
+    cudaMemset(d_C, 0, Csize);
+    zeroMatrix<rows,columns>(C);
+    esmm_shmem_multi<<<gridDim, blockDim.x, 2 * blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    std::cout << "Tiled multi 2 matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    cudaMemset(d_C, 0, Csize);
 
     // Free device memory
     cudaFree(d_A);
