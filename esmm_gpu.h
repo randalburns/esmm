@@ -111,7 +111,7 @@ __global__ void esmm_shmem_multi (int rows, int columns, int inners,
     int MT = blocksize;
 
     // RBTODO need to make dynamic
-    float tmpres[4] = {0.0}; // thread results
+    float tmpres[2] = {0.0}; // thread results
     //float tmpres[MT] = {0.0}; // thread results
 
     // for a block of A and B
@@ -124,19 +124,47 @@ __global__ void esmm_shmem_multi (int rows, int columns, int inners,
           sA[dotidx * blocksize + coloff] = A[(row + dotidx) * inners + inner + coloff];
           sB[dotidx * blocksize + coloff] = B[(inner + dotidx) * columns + col];
 	}
-	__syncthreads();
 
+	
+	/*
+        // Check the context of sA and sB looks good
+	for (int dotidx=0; dotidx<MT; dotidx++)
+	{
+	  // Load lock of A and B into shared memory
+          //C[(row + dotidx) * columns + col]  = sB[dotidx * blocksize + coloff]; 
+          C[(row + dotidx) * columns + col]  = sB[dotidx * blocksize + coloff]; 
+	}
+	__syncthreads();
+	return;
+	*/
+
+	// Let's try the normal loop
+        for (int i=0; i < blocksize; ++i)
+        {
+            for (int dotidx=0; dotidx < blocksize; dotidx++)
+ 	    {
+               C[(row + dotidx) * columns + col] +=  sA[dotidx * blocksize + i] * sB[i * blocksize + coloff]; 
+	    }
+	}
+        __syncthreads();
+    }
+    return;
+
+    {
 	// outer loop is offsets in C
 	for (int dotidx=0; dotidx<MT; dotidx++)
 	{
 	    float Btmp = sB[dotidx * blocksize + coloff];
 	    // inner loops is inners.  resuse Bvalue in register
-            for (int i=0; i < blocksize; ++i)
+            for (int i=0; i < 1; ++i)
+            //for (int i=0; i < blocksize; ++i)
             {
-                tmpres[i] += sA[dotidx * blocksize + i] * Btmp;  
+		C[(row + dotidx) * blocksize + coloff] = sA[dotidx * blocksize + i] + Btmp;
+                //tmpres[i] += sA[dotidx * blocksize + i] * Btmp;  
 	    }
 	}
         __syncthreads();
+	return;
 
 	// apply all updates to C
         for (int i=0; i < blocksize; ++i)
@@ -150,50 +178,3 @@ __global__ void esmm_shmem_multi (int rows, int columns, int inners,
 //    C[row * columns + col] = 100 * blockIdx.x + 10* blockIdx.y + row + 0.1*col;
 //    C[row * columns + col] = 100 * blockIdx.x + 10* blockIdx.y + rowoff + 0.1*coloff;
 //    C[row * columns + col] = B[0];
-
-
-
-// same as shmem, but not square
-//    memory area should be
-//      	rblksize * iblksize for A
-//      	iblksize * cblksize for B
-//    the products need to be the same
-__global__ void esmm_shmem_ns (int rows, int columns, int inners, 
-					int rblksz, int cblksz, int iblksz,
-					const float *A, const float *B, float *C)
-{
-    // change iteration order to output sequentially
-    const int row = blockIdx.x * rblksz + (threadIdx.x / cblksz);
-    const int col = blockIdx.y * cblksz + (threadIdx.x % cblksz);
-
-    int rowoff = row % rblksz;
-    int coloff = col % cblksz;
-
-    extern __shared__ float sArea [];
-    float* sA = sArea;  
-    float* sB = sArea + rblksz * iblksz; 
-
-    float tmp = 0.0;
-
-    // for a block of A and B
-    for (int inner=0; inner < inners; inner += iblksz)
-    {
-	// Load block of A and B into shared memory
-        sA[rowoff * iblksz + coloff] = A[row * inners + inner + coloff];
-        sB[rowoff * cblksz + coloff] = B[(inner + rowoff) * columns + col];
-	__syncthreads();
-
-        for (int i=1; i < iblksz; ++i)
-        {
-            // tmp += sA[rowoff * iblksz + i] * sB[i * cblksz + coloff]; 
-            tmp += sA[rowoff * iblksz + i] + sB[i * cblksz + coloff]; 
-	}
-        __syncthreads();
-    }
-
-    C[row * columns + col] = tmp;
-//    C[row * columns + col] = 100 * blockIdx.x + 10* blockIdx.y + row + 0.1*col;
-//    C[row * columns + col] = 100 * blockIdx.x + 10* blockIdx.y + rowoff + 0.1*coloff;
-//    C[row * columns + col] = B[0];
-    return;
-}

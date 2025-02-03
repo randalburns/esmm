@@ -77,6 +77,19 @@ int main() {
     printf("\n Sequential shared memory -- 2x2 \n\n");
     printMatrix<rows, columns>(C);
 
+    // multi 
+    cudaMemset(d_C, 0, Csize);
+    esmm_shmem_multi<<<dim3(1,1), 4, 4*4*2>>>(rows, columns, inners, 4, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Multi -- 4x4 \n\n");
+    printMatrix<rows, columns>(C);
+
+    // shared memory tiled
+    cudaMemset(d_C, 0, Csize);
+    esmm_shmem_multi<<<dim3(2,2), 2, 2*2*2>>>(rows, columns, inners, 2, d_A, d_B, d_C);
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    printf("\n Multi tiled -- 2x2 \n\n");
+    printMatrix<rows, columns>(C);
 
     return;
 
