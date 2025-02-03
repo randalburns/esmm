@@ -91,8 +91,10 @@ __global__ void esmm_sequential_shmem (int rows, int columns, int inners, int bl
         __syncthreads();
     }
 
-//    C[row * columns + col] = tmp;
-    C[row * columns + col] = B[row * columns + col];
+    C[row * columns + col] = tmp;
+
+// Check memory contents.  for debugging.
+//    C[row * columns + col] = B[row * columns + col];
     return;
 }
 
