@@ -4,8 +4,6 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <iostream>
-#include "esmm_multiply.h"
-
 
 __global__ void esmm_naive(int rows, int columns, int inners, const float *A,
                            const float *B, float *C)
@@ -92,7 +90,6 @@ __global__ void esmm_sequential_shmem (int rows, int columns, int inners, int bl
     }
 
     C[row * columns + col] = tmp;
-
 // Check memory contents.  for debugging.
 //    C[row * columns + col] = B[row * columns + col];
     return;
@@ -116,7 +113,7 @@ __global__ void esmm_shmem_multi (int rows, int columns, int inners,
     float* sB = sArea + blocksize * blocksize; 
 
     // RBTODO need to make dynamic
-    float tmpres[32] = {0.0}; // thread results
+    float tmpres[8] = {0.0}; // thread results
 
     // for a block of A and B
     for (int inner=0; inner < inners; inner += blocksize)
@@ -170,7 +167,7 @@ __global__ void esmm_shmem_multi2 (int rows, int columns, int inners,
     float* sB = sArea + blocksize * blocksize; 
 
     // RBTODO need to make dynamic
-    float tmpres[32] = {0.0}; // thread results
+    float tmpres[8] = {0.0}; // thread results
 
     // for a block of A and B
     for (int inner=0; inner < inners; inner += blocksize)

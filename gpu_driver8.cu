@@ -128,5 +128,11 @@ int main() {
     printf("\n Multi 2 tiled -- 2x2 \n\n");
     printMatrix<rows, columns>(C);
 
-    return;
+    // Free device memory
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
+
+    return 0;
+
 }
