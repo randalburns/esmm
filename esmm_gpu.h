@@ -111,6 +111,7 @@ __global__ void esmm_shmem_multi (int rows, int columns, int inners,
           sA[dotidx * blocksize + coloff] = A[(row + dotidx) * inners + inner + coloff];
           sB[dotidx * blocksize + coloff] = B[(inner + dotidx) * columns + col];
 	}
+        __syncthreads();
 
 	// This loop order not the same as siebohm
 	//  over all the inners
@@ -126,7 +127,6 @@ __global__ void esmm_shmem_multi (int rows, int columns, int inners,
         __syncthreads();
     }
 
-    // each thread loads blocksize elements
     for (int dotidx=0; dotidx<blocksize; dotidx++)
     {
         C[(row + dotidx) * columns + col] = tmpres[dotidx];
@@ -167,6 +167,7 @@ __global__ void esmm_shmem_multi2 (int rows, int columns, int inners,
           sA[dotidx * blocksize + coloff] = A[(row + dotidx) * inners + inner + coloff];
           sB[dotidx * blocksize + coloff] = B[(inner + dotidx) * columns + col];
 	}
+        __syncthreads();
 
         for (int dotidx=0; dotidx < blocksize; dotidx++)
         {
