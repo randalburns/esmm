@@ -2,8 +2,20 @@
 #include "esmm_cpu.h"
 
 
+#include <iostream>
+#include <chrono>
+
+
+#define TIME_BLOCK_START auto start = std::chrono::high_resolution_clock::now();
+#define TIME_BLOCK_RESTART start = std::chrono::high_resolution_clock::now();
+#define TIME_BLOCK_END  { \
+    auto stop = std::chrono::high_resolution_clock::now(); \
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start); \
+    std::cout << "Execution time: " << duration.count() << " microseconds" << std::endl; \
+}
+
 // Function to check if two matrices are equal within a tolerance
-bool checkEqual(int rows, int cols, float* matrix1, float* matrix2, float tolerance = 1e-6) {
+bool checkEqual(int rows, int cols, float* matrix1, float* matrix2, float tolerance = 1e-4) {
     for (int row = 0; row < rows; ++row) {
         for (int col = 0; col < cols; ++col) {
             if (std::fabs(matrix1[row * cols + col] - matrix2[row * cols + col]) > tolerance) {
@@ -25,20 +37,12 @@ bool checkEqual(int rows, int cols, float* matrix1, float* matrix2, float tolera
 int main() {
 
     // Define 4x4 matrices A and B, and an output matrix C
-    constexpr int rows = 32;
-    constexpr int columns = 32;
-    constexpr int inners = 32; 
+    constexpr int rows = 512;
+    constexpr int columns = 512;
+    constexpr int inners = 512; 
      
-    dim3 gridDim(2,2);
-    dim3 blockDim(16,16);
-
-    // rectangular 2,4
-    dim3 gridDim24(2,4);
-    dim3 blockDim24(16,8);
-    
-    // rectangular 4,2
-    dim3 gridDim42(4,2);
-    dim3 blockDim42(8,16);
+    dim3 gridDim(16,16);
+    dim3 blockDim(32,32);
 
     size_t Asize = rows * inners * sizeof(float);
     size_t Bsize = inners * columns * sizeof(float);
@@ -47,7 +51,6 @@ int main() {
     float A[rows * inners];
     float B[inners * columns];
     float C[rows * columns];
-    float Cref[rows * columns];
     float Ccpu[rows * columns];
     
     // Initialize A to random floating-point values between 0 and 1
@@ -66,7 +69,9 @@ int main() {
 
     // baseMM on CPU
     zeroMatrix<rows,columns>(Ccpu);
+    TIME_BLOCK_START
     baseMM<rows, columns, inners>(A, B, Ccpu);
+    TIME_BLOCK_END
 	    
     // Allocate device memory
     float *d_A, *d_B, *d_C;
@@ -78,63 +83,59 @@ int main() {
     cudaMemcpy(d_A, A, Asize, cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, B, Bsize, cudaMemcpyHostToDevice);
 
-
     // Tiled naive
+    zeroMatrix<rows,columns>(C);
     cudaMemset(d_C, 0, Csize);
-    zeroMatrix<rows,columns>(Cref);
+    TIME_BLOCK_RESTART
     esmm_naive<<<gridDim, blockDim>>>(rows, columns, inners, d_A, d_B, d_C);
-    cudaMemcpy(Cref, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "Tiled naive kernel matches = " << checkEqual ( rows, columns, Ccpu, Cref ) << std::endl;
+    TIME_BLOCK_END
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    std::cout << "Tiled naive kernel matches = " << checkEqual ( rows, columns, Ccpu, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
 
     // tiled sequential
-    cudaMemset(d_C, 0, Csize);
     zeroMatrix<rows,columns>(C);
+    cudaMemset(d_C, 0, Csize);
+    TIME_BLOCK_RESTART
     esmm_sequential<<<gridDim, blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    TIME_BLOCK_END
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "Sequential kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
-    cudaMemset(d_C, 0, Csize);
-
-    // tiled not square	
-    cudaMemset(d_C, 0, Csize);
-    zeroMatrix<rows,columns>(C);
-    esmm_sequential_ns<<<gridDim24, blockDim24.x * blockDim24.y>>>(rows, columns, inners, blockDim24.x, blockDim24.y, d_A, d_B, d_C);
-    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "Not square 24 kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
-    cudaMemset(d_C, 0, Csize);
-
-    // tiled not square	
-    cudaMemset(d_C, 0, Csize);
-    zeroMatrix<rows,columns>(C);
-    esmm_sequential_ns<<<gridDim42, blockDim42.x * blockDim42.y>>>(rows, columns, inners, blockDim42.x, blockDim42.y, d_A, d_B, d_C);
-    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "Not square 42 kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    std::cout << "Sequential kernel matches = " << checkEqual ( rows, columns, Ccpu, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
 
     // tiled shared memory
-    cudaMemset(d_C, 0, Csize);
     zeroMatrix<rows,columns>(C);
-    esmm_sequential_shmem<<<dim3(2,2), 16*16, 16*16*2>>>(rows, columns, inners, 16, d_A, d_B, d_C);
-//    esmm_sequential_shmem<<<gridDim, blockDim.x * blockDim.y, 2 * blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    cudaMemset(d_C, 0, Csize);
+    TIME_BLOCK_RESTART
+    esmm_sequential_shmem<<<gridDim, blockDim.x * blockDim.y, 2 * blockDim.x * blockDim.y * sizeof(float)>>>
+	    			(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    TIME_BLOCK_END
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "Tiled shared memory kernel = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    std::cout << "Tiled shared memory kernel = " << checkEqual ( rows, columns, Ccpu, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
 
     // multi
-    cudaMemset(d_C, 0, Csize);
     zeroMatrix<rows,columns>(C);
-    esmm_shmem_multi<<<gridDim, blockDim.x, 2 * blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    cudaMemset(d_C, 0, Csize);
+    TIME_BLOCK_RESTART
+    esmm_shmem_multi<<<gridDim, blockDim.x, 2 * blockDim.x * blockDim.y * sizeof(float)>>>
+    			(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    TIME_BLOCK_END
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "Tiled multi matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    std::cout << "Tiled multi matches = " << checkEqual ( rows, columns, Ccpu, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
 
-    // multi2
-    cudaMemset(d_C, 0, Csize);
+    // multi 2
     zeroMatrix<rows,columns>(C);
-    esmm_shmem_multi<<<gridDim, blockDim.x, 2 * blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
-    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "Tiled multi 2 matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
+    TIME_BLOCK_RESTART
+    esmm_shmem_multi2<<<gridDim, blockDim.x, 2 * blockDim.x * blockDim.y * sizeof(float)>>>
+    				(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    TIME_BLOCK_END
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    std::cout << "Tiled multi matches = " << checkEqual ( rows, columns, Ccpu, C ) << std::endl;
+    cudaMemset(d_C, 0, Csize);
+
 
     // Free device memory
     cudaFree(d_A);

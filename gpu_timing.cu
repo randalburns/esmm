@@ -17,11 +17,11 @@
 int main() {
 
     // Define 4x4 matrices A and B, and an output matrix C
-    constexpr int rows = 768;
-    constexpr int columns = 768;
-    constexpr int inners = 768; 
+    constexpr int rows = 512;
+    constexpr int columns = 512;
+    constexpr int inners = 512; 
      
-    dim3 gridDim(24,24);
+    dim3 gridDim(16,16);
     dim3 blockDim(32,32);
 
     size_t Asize = rows * inners * sizeof(float);
@@ -77,7 +77,7 @@ int main() {
     // tiled shared memory
     cudaMemset(d_C, 0, Csize);
     TIME_BLOCK_RESTART
-    esmm_sequential_shmem<<<gridDim, blockDim.x * blockDim.y, 2 * blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    esmm_sequential_shmem<<<gridDim, blockDim.x * blockDim.y, 2 * blockDim.x * blockDim.y * sizeof(float)>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
     TIME_BLOCK_END
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "Tiled shared memory kernel " << std::endl;
@@ -86,7 +86,7 @@ int main() {
     // multi
     cudaMemset(d_C, 0, Csize);
     TIME_BLOCK_RESTART
-    esmm_shmem_multi<<<gridDim, blockDim.x, 2 * blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    esmm_shmem_multi<<<gridDim, blockDim.x, 2 * blockDim.x * blockDim.y * sizeof(float)>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
     TIME_BLOCK_END
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "Tiled multi " << std::endl;
@@ -95,12 +95,11 @@ int main() {
     // multi 2
     cudaMemset(d_C, 0, Csize);
     TIME_BLOCK_RESTART
-    esmm_shmem_multi2<<<gridDim, blockDim.x, 2 * blockDim.x * blockDim.y>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
+    esmm_shmem_multi2<<<gridDim, blockDim.x, 2 * blockDim.x * blockDim.y * sizeof(float)>>>(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
     TIME_BLOCK_END
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "Tiled multi 2 " << std::endl;
     cudaMemset(d_C, 0, Csize);
-
 
     // Free device memory
     cudaFree(d_A);

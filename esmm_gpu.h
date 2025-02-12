@@ -39,23 +39,6 @@ __global__ void esmm_sequential (int rows, int columns, int inners, int blocksiz
     C[row * columns + col] = tmp;
 }
 
-// same as sequential, but not square
-__global__ void esmm_sequential_ns (int rows, int columns, int inners, 
-					int rblksz, int cblksz, 
-					const float *A, const float *B, float *C)
-{
-    // change iteration order to output sequentially
-    const int row = blockIdx.x * rblksz + (threadIdx.x / cblksz);
-    const int col = blockIdx.y * cblksz + (threadIdx.x % cblksz);
-
-    float tmp = 0.0;
-    for (int i=0; i < inners; ++i)
-    {
-          tmp += A[row * inners + i] * B[i * columns + col]; 
-    }
-    C[row * columns + col] = tmp;
-}
-
 
 // 2-d blocks. 1 element per thread
 __global__ void esmm_sequential_shmem (int rows, int columns, int inners, int blocksize, 
@@ -98,6 +81,9 @@ __global__ void esmm_sequential_shmem (int rows, int columns, int inners, int bl
 // multiple elements updated per thread
 //
 //   for blksz^2 in C with blksz threads
+//
+//   multi -- inners outerloop, blocksize innerloop
+//     this allows us to dot he register reuse of Btmp
 __global__ void esmm_shmem_multi (int rows, int columns, int inners, 
 			   	int blocksize,
 		       	        const float *A, const float *B, float *C)
@@ -113,7 +99,7 @@ __global__ void esmm_shmem_multi (int rows, int columns, int inners,
     float* sB = sArea + blocksize * blocksize; 
 
     // RBTODO need to make dynamic
-    float tmpres[8] = {0.0}; // thread results
+    float tmpres[32] = {0.0}; // thread results
 
     // for a block of A and B
     for (int inner=0; inner < inners; inner += blocksize)
@@ -152,6 +138,8 @@ __global__ void esmm_shmem_multi (int rows, int columns, int inners,
 //
 //   for blksz^2 in C with blksz threads
 //     we can do the inner sweep on a smaller size
+//     
+// mutlti2 inners outerloop
 __global__ void esmm_shmem_multi2 (int rows, int columns, int inners, 
 			   	int blocksize,
 		       	        const float *A, const float *B, float *C)
@@ -167,7 +155,7 @@ __global__ void esmm_shmem_multi2 (int rows, int columns, int inners,
     float* sB = sArea + blocksize * blocksize; 
 
     // RBTODO need to make dynamic
-    float tmpres[8] = {0.0}; // thread results
+    float tmpres[32] = {0.0}; // thread results
 
     // for a block of A and B
     for (int inner=0; inner < inners; inner += blocksize)
@@ -199,6 +187,7 @@ __global__ void esmm_shmem_multi2 (int rows, int columns, int inners,
 }
 
 // this is an unrolled version for the future?
+//   should serve as inner loop for multi2
 __device__ void multiply_dense8 (int dotidx, int i, int blocksize, int coloff, float* tmpres, float* sA, float * sB)
 {
                tmpres[dotidx] +=  sA[dotidx * blocksize + i] * sB[i * blocksize + coloff];

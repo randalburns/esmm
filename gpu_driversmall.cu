@@ -68,7 +68,7 @@ int main() {
     // shared memory
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<2,2>(C);
-    esmm_sequential_shmem<<<dim3(1,1), dim3(2*2), 2*2*2>>>(rows, columns, inners, 2, d_A, d_B, d_C);
+    esmm_sequential_shmem<<<dim3(1,1), dim3(2*2), 2*2*2*sizeof(float)>>>(rows, columns, inners, 2, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     printf("\n Sequential shared memory -- 4x4 \n\n");
     printMatrix<rows, columns>(C);
@@ -76,7 +76,7 @@ int main() {
     // shared memory tiled
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<2,2>(C);
-    esmm_sequential_shmem<<<dim3(2,2), dim3(1*1), 2>>>(rows, columns, inners, 1, d_A, d_B, d_C);
+    esmm_sequential_shmem<<<dim3(2,2), dim3(1*1), 2*sizeof(float)>>>(rows, columns, inners, 1, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     printf("\n Sequential shared memory tiled -- 1x1 \n\n");
     printMatrix<rows, columns>(C);
@@ -84,7 +84,7 @@ int main() {
     // shmem_multi
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<2,2>(C);
-    esmm_shmem_multi<<<dim3(1,1), dim3(2), 2*2*2>>>(rows, columns, inners, 2, d_A, d_B, d_C);
+    esmm_shmem_multi<<<dim3(1,1), dim3(2), 2*2*2*sizeof(float)>>>(rows, columns, inners, 2, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     printf("\n Multi \n\n");
     printMatrix<rows, columns>(C);
@@ -92,7 +92,7 @@ int main() {
     // shmem_multi tiled
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<2,2>(C);
-    esmm_shmem_multi<<<dim3(2,2), dim3(1), 2>>>(rows, columns, inners, 1, d_A, d_B, d_C);
+    esmm_shmem_multi<<<dim3(2,2), dim3(1), 2*sizeof(float)>>>(rows, columns, inners, 1, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     printf("\n Multi tiled -- 1x1 \n\n");
     printMatrix<rows, columns>(C);
@@ -100,15 +100,15 @@ int main() {
     // shmem_multi2
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<2,2>(C);
-    esmm_shmem_multi2<<<dim3(1,1), dim3(2), 2*2*2>>>(rows, columns, inners, 2, d_A, d_B, d_C);
+    esmm_shmem_multi2<<<dim3(1,1), dim3(2), 2*2*2*sizeof(float)>>>(rows, columns, inners, 2, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     printf("\n Multi 2 \n\n");
     printMatrix<rows, columns>(C);
 
-    // shmem_multi tiled
+    // shmem_multi2 tiled
     cudaMemset(d_C, 0, Csize);
     zeroMatrix<2,2>(C);
-    esmm_shmem_multi2<<<dim3(2,2), dim3(1), 2>>>(rows, columns, inners, 1, d_A, d_B, d_C);
+    esmm_shmem_multi2<<<dim3(2,2), dim3(1), 2*sizeof(float)>>>(rows, columns, inners, 1, d_A, d_B, d_C);
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     printf("\n Multi 2 tiled -- 1x1 \n\n");
     printMatrix<rows, columns>(C);
