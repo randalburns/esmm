@@ -60,21 +60,19 @@ __global__ void esmm_sequential_shmem (int rows, int columns, int inners, int bl
     // for a block of A and B
     for (int inner=0; inner < inners; inner += blocksize)
     {
-	// Load block of A and B into shared memory
+	    // Load block of A and B into shared memory
         sA[rowoff * blocksize + coloff] = A[row * inners + inner + coloff];
         sB[rowoff * blocksize + coloff] = B[(inner + rowoff) * columns + col];
-	__syncthreads();
+	    __syncthreads();
 
         for (int i=0; i < blocksize; ++i)
         {
             tmp += sA[rowoff * blocksize + i] * sB[i * blocksize + coloff]; 
-	}
+	    }
         __syncthreads();
     }
 
     C[row * columns + col] = tmp;
-// Check memory contents.  for debugging.
-//    C[row * columns + col] = B[row * columns + col];
     return;
 }
 
@@ -94,36 +92,36 @@ __global__ void esmm_shmem_multi (int rows, int columns, int inners,
 
     int coloff = col % blocksize;
 
-    extern __shared__ float sArea [];
-    float* sA = sArea;  
-    float* sB = sArea + blocksize * blocksize; 
+    extern __shared__ float sArea[];
+    float *sA = sArea;
+    float *sB = sArea + blocksize * blocksize;
 
     // RBTODO need to make dynamic
     float tmpres[32] = {0.0}; // thread results
 
     // for a block of A and B
-    for (int inner=0; inner < inners; inner += blocksize)
+    for (int inner = 0; inner < inners; inner += blocksize)
     {
         // each thread loads MT elements
-	for (int dotidx=0; dotidx<blocksize; dotidx++)
-	{
-	  // Load lock of A and B into shared memory
-          sA[dotidx * blocksize + coloff] = A[(row + dotidx) * inners + inner + coloff];
-          sB[dotidx * blocksize + coloff] = B[(inner + dotidx) * columns + col];
-	}
+        for (int dotidx = 0; dotidx < blocksize; dotidx++)
+        {
+            // Load lock of A and B into shared memory
+            sA[dotidx * blocksize + coloff] = A[(row + dotidx) * inners + inner + coloff];
+            sB[dotidx * blocksize + coloff] = B[(inner + dotidx) * columns + col];
+        }
         __syncthreads();
 
-	// This loop order not the same as siebohm
-	//  over all the inners
-        for (int i=0; i < blocksize; ++i)
+        // This loop order not the same as siebohm
+        //  over all the inners
+        for (int i = 0; i < blocksize; ++i)
         {
             // reuse a single element of B and apply to all thread partials
-	    float Btmp = sB[i * blocksize + coloff];
-            for (int dotidx=0; dotidx < blocksize; dotidx++)
- 	    {
-               tmpres[dotidx] +=  sA[dotidx * blocksize + i] * Btmp;
-	    }
-	}
+            float Btmp = sB[i * blocksize + coloff];
+            for (int dotidx = 0; dotidx < blocksize; dotidx++)
+            {
+                tmpres[dotidx] += sA[dotidx * blocksize + i] * Btmp;
+            }
+        }
         __syncthreads();
     }
 
@@ -140,9 +138,9 @@ __global__ void esmm_shmem_multi (int rows, int columns, int inners,
 //     we can do the inner sweep on a smaller size
 //     
 // mutlti2 inners outerloop
-__global__ void esmm_shmem_multi2 (int rows, int columns, int inners, 
-			   	int blocksize,
-		       	        const float *A, const float *B, float *C)
+__global__ void esmm_shmem_multi2(int rows, int columns, int inners,
+                                  int blocksize,
+                                  const float *A, const float *B, float *C)
 {
     // 1-d array of threads
     const int row = blockIdx.x * blocksize;
@@ -150,37 +148,37 @@ __global__ void esmm_shmem_multi2 (int rows, int columns, int inners,
 
     int coloff = col % blocksize;
 
-    extern __shared__ float sArea [];
-    float* sA = sArea;  
-    float* sB = sArea + blocksize * blocksize; 
+    extern __shared__ float sArea[];
+    float *sA = sArea;
+    float *sB = sArea + blocksize * blocksize;
 
     // RBTODO need to make dynamic
     float tmpres[32] = {0.0}; // thread results
 
     // for a block of A and B
-    for (int inner=0; inner < inners; inner += blocksize)
+    for (int inner = 0; inner < inners; inner += blocksize)
     {
         // each thread loads MT elements
-	for (int dotidx=0; dotidx<blocksize; dotidx++)
-	{
-	  // Load lock of A and B into shared memory
-          sA[dotidx * blocksize + coloff] = A[(row + dotidx) * inners + inner + coloff];
-          sB[dotidx * blocksize + coloff] = B[(inner + dotidx) * columns + col];
-	}
+        for (int dotidx = 0; dotidx < blocksize; dotidx++)
+        {
+            // Load lock of A and B into shared memory
+            sA[dotidx * blocksize + coloff] = A[(row + dotidx) * inners + inner + coloff];
+            sB[dotidx * blocksize + coloff] = B[(inner + dotidx) * columns + col];
+        }
         __syncthreads();
 
-        for (int dotidx=0; dotidx < blocksize; dotidx++)
+        for (int dotidx = 0; dotidx < blocksize; dotidx++)
         {
-            for (int i=0; i < blocksize; ++i)
- 	    {
-               tmpres[dotidx] +=  sA[dotidx * blocksize + i] * sB[i * blocksize + coloff];
-	    }
-	}
+            for (int i = 0; i < blocksize; ++i)
+            {
+                tmpres[dotidx] += sA[dotidx * blocksize + i] * sB[i * blocksize + coloff];
+            }
+        }
         __syncthreads();
     }
 
     // each thread loads blocksize elements
-    for (int dotidx=0; dotidx<blocksize; dotidx++)
+    for (int dotidx = 0; dotidx < blocksize; dotidx++)
     {
         C[(row + dotidx) * columns + col] = tmpres[dotidx];
     }
@@ -201,6 +199,4 @@ __device__ void multiply_dense8 (int dotidx, int i, int blocksize, int coloff, f
                tmpres[dotidx] +=  sA[dotidx * blocksize + i+7] * sB[(i+7) * blocksize + coloff];
                return;
 }
-
-
 #endif
