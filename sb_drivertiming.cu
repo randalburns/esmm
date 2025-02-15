@@ -17,6 +17,20 @@
     std::cout << "Execution time: " << duration.count() << " microseconds" << std::endl; \
 }
 
+#define cudaCheckErrors(msg) \
+  do { \
+    cudaError_t __err = cudaGetLastError(); \
+    if (__err != cudaSuccess) { \
+        fprintf(stderr, "Fatal error: %s (%s at %s:%d)\n", \
+            msg, cudaGetErrorString(__err), \
+            __FILE__, __LINE__); \
+        fprintf(stderr, "*** FAILED - ABORTING\n"); \
+        exit(1); \
+    } \
+  } while (0)
+
+
+
 // Function to check if two matrices are equal within a tolerance
 bool checkEqual(int rows, int cols, float* matrix1, float* matrix2, float tolerance = 1e-4) {
     for (int row = 0; row < rows; ++row) {
@@ -38,6 +52,10 @@ bool checkEqual(int rows, int cols, float* matrix1, float* matrix2, float tolera
 
 
 int main() {
+
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, 0);
+    printf("Max threads per block: %d\n", prop.maxThreadsPerBlock);
 
     // Define 4x4 matrices A and B, and an output matrix C
     constexpr int rows = 2048;
@@ -132,6 +150,7 @@ int main() {
 				 blockDim.x, blockDim.y, blockDim.x / TM,
 				 d_A, d_B, d_C);
     TIME_BLOCK_END
+    cudaCheckErrors("1-d tiling");
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "SB 1-d tiled = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
@@ -145,6 +164,7 @@ int main() {
 				 64, 64, 64 / TM,
 				 d_A, d_B, d_C);
     TIME_BLOCK_END
+    cudaCheckErrors("1-d tiling (manual)");
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "SB 1-d tiled = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
