@@ -135,7 +135,7 @@ __global__ void sb_shmem (int M, int N, int K,
 
 // results per thread -- need by driver
 
-#define TM 8
+const int TM=8;
 
 __global__ void sb_1dwarp_tile (int M, int N, int K,
 				int BM, int BN, int BK, 

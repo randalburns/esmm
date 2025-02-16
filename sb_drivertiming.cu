@@ -58,12 +58,20 @@ int main() {
     printf("Max threads per block: %d\n", prop.maxThreadsPerBlock);
 
     // Define 4x4 matrices A and B, and an output matrix C
-    constexpr int rows = 2048;
-    constexpr int columns = 2048;
-    constexpr int inners = 2048; 
+    constexpr int rows = 4096;
+    constexpr int columns = 4096;
+    constexpr int inners = 4096; 
      
-    dim3 gridDim(64,64);
+    // for 2048 (64,64), (32,32)
+    // for 4096 (128,128, (32,32)
+    dim3 gridDim(128,128);
     dim3 blockDim(32,32);
+
+    // for 2048 (32,32), (64*64/TM)
+    // for 4096 (64,64), (64*64/TM)
+    dim3 dGridDim(64,64);
+    int chunkSize = 64;
+    int dBlockSize = chunkSize * chunkSize / TM;
 
     size_t Asize = rows * inners * sizeof(float);
     size_t Bsize = inners * columns * sizeof(float);
@@ -130,41 +138,29 @@ int main() {
     std::cout << "SB shared memory kernel = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
     
-    // sb 1-d
-    zeroMatrix<rows,columns>(C);
-    cudaMemset(d_C, 0, Csize);
-    TIME_BLOCK_RESTART
-    sb_1dwarp_tile<<<dim3(32,32), 64 * 64 / TM, 2 * 64 * 64 / TM * sizeof(float)>>>
-	    			(rows, columns, inners, 
-				 64, 64, 64 / TM,
-				 d_A, d_B, d_C);
-    TIME_BLOCK_END
-    cudaCheckErrors("1-d tiling (manual)");
-    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "SB 1-d tiled = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
-    cudaMemset(d_C, 0, Csize);
 
     // sb 1-d
     zeroMatrix<rows,columns>(C);
     cudaMemset(d_C, 0, Csize);
     TIME_BLOCK_RESTART
-    sb_1dwarp_tile<<<dim3(32,32), 64 * 64 / TM, 2 * 64 * 64 / TM * sizeof(float)>>>
+    sb_1dwarp_tile<<<dGridDim, dim3(dBlockSize), 2 * dBlockSize * sizeof(float)>>>
 	    			(rows, columns, inners, 
-				 64, 64, 64 / TM,
+				 chunkSize, chunkSize, chunkSize / TM,
 				 d_A, d_B, d_C);
     TIME_BLOCK_END
-    cudaCheckErrors("1-d tiling (manual)");
+    cudaCheckErrors("1-d tile");
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "SB 1-d tiled again = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    std::cout << "SB 1-d tiled = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
+
 
     // sb 1-d loop reordered
     zeroMatrix<rows,columns>(C);
     cudaMemset(d_C, 0, Csize);
     TIME_BLOCK_RESTART
-    sb_1dwarp_switchorder<<<dim3(32,32), 64 * 64 / TM, 2 * 64 * 64 / TM * sizeof(float)>>>
+    sb_1dwarp_switchorder<<<dGridDim, dim3(dBlockSize), 2 * dBlockSize * sizeof(float)>>>
 	    			(rows, columns, inners, 
-				 64, 64, 64 / TM,
+				 chunkSize, chunkSize, chunkSize / TM,
 				 d_A, d_B, d_C);
     TIME_BLOCK_END
     cudaCheckErrors("1-d tiling (reorder)");
@@ -176,9 +172,9 @@ int main() {
     zeroMatrix<rows,columns>(C);
     cudaMemset(d_C, 0, Csize);
     TIME_BLOCK_RESTART
-    sb_1dwarp_unrolled<<<dim3(32,32), 64 * 64 / TM, 2 * 64 * 64 / TM * sizeof(float)>>>
+    sb_1dwarp_unrolled<<<dGridDim, dim3(dBlockSize), 2 * dBlockSize * sizeof(float)>>>
 	    			(rows, columns, inners, 
-				 64, 64, 64 / TM,
+				 chunkSize, chunkSize, chunkSize / TM,
 				 d_A, d_B, d_C);
     TIME_BLOCK_END
     cudaCheckErrors("1-d tiling (unrolled)");
@@ -190,9 +186,9 @@ int main() {
     zeroMatrix<rows,columns>(C);
     cudaMemset(d_C, 0, Csize);
     TIME_BLOCK_RESTART
-    sb_1dwarp_unrolled_25p<<<dim3(32,32), 64 * 64 / TM, 2 * 64 * 64 / TM * sizeof(float)>>>
+    sb_1dwarp_unrolled_25p<<<dGridDim, dim3(dBlockSize), 2 * dBlockSize * sizeof(float)>>>
 	    			(rows, columns, inners, 
-				 64, 64, 64 / TM,
+				 chunkSize, chunkSize, chunkSize / TM,
 				 d_A, d_B, d_C);
     TIME_BLOCK_END
     cudaCheckErrors("1-d tiling 25% (unrolled)");
