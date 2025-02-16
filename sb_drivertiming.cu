@@ -195,8 +195,8 @@ int main() {
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "SB 1-d tiled 25% (unrolled) = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
-
     
+   
     /*
     // CU blas
     zeroMatrix<rows,columns>(C);
