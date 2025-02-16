@@ -119,17 +119,6 @@ int main() {
     std::cout << "Sequential kernel matches = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
 
-    // tiled shared memory
-    zeroMatrix<rows,columns>(C);
-    cudaMemset(d_C, 0, Csize);
-    TIME_BLOCK_RESTART
-    esmm_shmem<<<gridDim, blockDim.x * blockDim.y, 2 * blockDim.x * blockDim.y * sizeof(float)>>>
-	    			(rows, columns, inners, blockDim.x, d_A, d_B, d_C);
-    TIME_BLOCK_END
-    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "Tiled shared memory kernel = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
-    cudaMemset(d_C, 0, Csize);
-
     // sb tiled shared memory
     zeroMatrix<rows,columns>(C);
     cudaMemset(d_C, 0, Csize);
@@ -140,17 +129,17 @@ int main() {
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "SB shared memory kernel = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
-
+    
     // sb 1-d
     zeroMatrix<rows,columns>(C);
     cudaMemset(d_C, 0, Csize);
     TIME_BLOCK_RESTART
-    sb_1dwarp_tile<<<gridDim, blockDim.x * blockDim.y / TM, 2 * blockDim.x * blockDim.y / TM * sizeof(float)>>>
+    sb_1dwarp_tile<<<dim3(32,32), 64 * 64 / TM, 2 * 64 * 64 / TM * sizeof(float)>>>
 	    			(rows, columns, inners, 
-				 blockDim.x, blockDim.y, blockDim.x / TM,
+				 64, 64, 64 / TM,
 				 d_A, d_B, d_C);
     TIME_BLOCK_END
-    cudaCheckErrors("1-d tiling");
+    cudaCheckErrors("1-d tiling (manual)");
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
     std::cout << "SB 1-d tiled = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
@@ -166,11 +155,53 @@ int main() {
     TIME_BLOCK_END
     cudaCheckErrors("1-d tiling (manual)");
     cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
-    std::cout << "SB 1-d tiled = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    std::cout << "SB 1-d tiled again = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
 
+    // sb 1-d loop reordered
+    zeroMatrix<rows,columns>(C);
+    cudaMemset(d_C, 0, Csize);
+    TIME_BLOCK_RESTART
+    sb_1dwarp_switchorder<<<dim3(32,32), 64 * 64 / TM, 2 * 64 * 64 / TM * sizeof(float)>>>
+	    			(rows, columns, inners, 
+				 64, 64, 64 / TM,
+				 d_A, d_B, d_C);
+    TIME_BLOCK_END
+    cudaCheckErrors("1-d tiling (reorder)");
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    std::cout << "SB 1-d tiled (reorder) = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    cudaMemset(d_C, 0, Csize);
 
-/*
+    // sb 1-d unrolled
+    zeroMatrix<rows,columns>(C);
+    cudaMemset(d_C, 0, Csize);
+    TIME_BLOCK_RESTART
+    sb_1dwarp_unrolled<<<dim3(32,32), 64 * 64 / TM, 2 * 64 * 64 / TM * sizeof(float)>>>
+	    			(rows, columns, inners, 
+				 64, 64, 64 / TM,
+				 d_A, d_B, d_C);
+    TIME_BLOCK_END
+    cudaCheckErrors("1-d tiling (unrolled)");
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    std::cout << "SB 1-d tiled (unrolled) = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    cudaMemset(d_C, 0, Csize);
+
+    // sb 1-d unrolled 25%
+    zeroMatrix<rows,columns>(C);
+    cudaMemset(d_C, 0, Csize);
+    TIME_BLOCK_RESTART
+    sb_1dwarp_unrolled_25p<<<dim3(32,32), 64 * 64 / TM, 2 * 64 * 64 / TM * sizeof(float)>>>
+	    			(rows, columns, inners, 
+				 64, 64, 64 / TM,
+				 d_A, d_B, d_C);
+    TIME_BLOCK_END
+    cudaCheckErrors("1-d tiling 25% (unrolled)");
+    cudaMemcpy(C, d_C, Csize, cudaMemcpyDeviceToHost);
+    std::cout << "SB 1-d tiled 25% (unrolled) = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
+    cudaMemset(d_C, 0, Csize);
+
+    
+    /*
     // CU blas
     zeroMatrix<rows,columns>(C);
     cudaMemset(d_C, 0, Csize);
@@ -196,8 +227,8 @@ int main() {
     std::cout << "cuBlas = " << checkEqual ( rows, columns, Cref, C ) << std::endl;
     cudaMemset(d_C, 0, Csize);
     cublasDestroy(handle);
-*/
-
+    */
+    
 
     // Free device memory
     cudaFree(d_A);

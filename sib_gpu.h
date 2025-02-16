@@ -212,5 +212,251 @@ __global__ void sb_1dwarp_tile (int M, int N, int K,
   }
 }
 
+__global__ void sb_1dwarp_switchorder (int M, int N, int K,
+				int BM, int BN, int BK, 
+                                const float *A, const float *B, float *C) 
+{
+
+  // If we flip x and y here we get ~30% less performance for large matrices.
+  // The current, 30% faster configuration ensures that blocks with sequential
+  // blockIDs access columns of B sequentially, while sharing the same row of A.
+  // The slower configuration would share columns of A, but access into B would
+  // be non-sequential. So the faster configuration has better spatial locality
+  // and hence a greater L2 hit rate.
+  const uint cRow = blockIdx.y;
+  const uint cCol = blockIdx.x;
+
+  const uint totalResultsBlocktile = BM * BN;
+  // A thread is responsible for calculating TM elements in the blocktile
+  const uint numThreadsBlocktile = totalResultsBlocktile / TM;
+
+  // ResultsPerBlock / ResultsPerThread == ThreadsPerBlock
+  assert(numThreadsBlocktile == blockDim.x);
+
+  // each warp will calculate 32*TM elements, with 32 being the columnar dim.
+  const int threadCol = threadIdx.x % BN;
+  const int threadRow = threadIdx.x / BN;
+
+  // allocate space for the current blocktile in SMEM
+    extern __shared__ float sArea [];
+    float* As = sArea;  
+    float* Bs = sArea + BM * BK; 
+
+  // Move blocktile to beginning of A's row and B's column
+  A += cRow * BM * K;
+  B += cCol * BN;
+  C += cRow * BM * N + cCol * BN;
+
+  // todo: adjust this to each thread to load multiple entries and
+  // better exploit the cache sizes
+  const uint innerColA = threadIdx.x % BK; // warp-level GMEM coalescing
+  const uint innerRowA = threadIdx.x / BK;
+  const uint innerColB = threadIdx.x % BN; // warp-level GMEM coalescing
+  const uint innerRowB = threadIdx.x / BN;
+
+  // allocate thread-local cache for results in registerfile
+  float threadResults[TM] = {0.0};
+
+  // outer loop over block tiles
+  for (uint bkIdx = 0; bkIdx < K; bkIdx += BK) {
+    // populate the SMEM caches
+    As[innerRowA * BK + innerColA] = A[innerRowA * K + innerColA];
+    Bs[innerRowB * BN + innerColB] = B[innerRowB * N + innerColB];
+    __syncthreads();
+
+    // advance blocktile
+    A += BK;
+    B += BK * N;
+
+    // calculate per-thread results
+    for (uint resIdx = 0; resIdx < TM; ++resIdx) {
+      for (uint dotIdx = 0; dotIdx < BK; ++dotIdx) {
+        threadResults[resIdx] +=
+            As[(threadRow * TM + resIdx) * BK + dotIdx] * Bs[dotIdx * BN + threadCol];
+      }
+    }
+    __syncthreads();
+  }
+
+  // write out the results
+  for (uint resIdx = 0; resIdx < TM; ++resIdx) {
+    C[(threadRow * TM + resIdx) * N + threadCol] = threadResults[resIdx];
+  }
+}
+
+
+// this is an unrolled version 
+//   TM must == 8 (asserted in kernel start)
+__device__ inline void multiply_dense8 (int threadRow, int dotIdx, int BK, float* threadResults, float* As, float Breg)
+{
+               threadResults[0] += As[(threadRow * 8 ) * BK + dotIdx] * Breg;
+               threadResults[1] += As[(threadRow * 8 + 1) * BK + dotIdx] * Breg;
+               threadResults[2] += As[(threadRow * 8 + 2) * BK + dotIdx] * Breg;
+               threadResults[3] += As[(threadRow * 8 + 3) * BK + dotIdx] * Breg;
+               threadResults[4] += As[(threadRow * 8 + 4) * BK + dotIdx] * Breg;
+               threadResults[5] += As[(threadRow * 8 + 5) * BK + dotIdx] * Breg;
+               threadResults[6] += As[(threadRow * 8 + 6) * BK + dotIdx] * Breg;
+               threadResults[7] += As[(threadRow * 8 + 7) * BK + dotIdx] * Breg;
+               return;
+}
+
+// this is an unrolled version 
+//   TM must == 8 (asserted in kernel start)
+__device__ inline void multiply_dense8_25p (int threadRow, int dotIdx, int BK, float* threadResults, float* As, float Breg)
+{
+               threadResults[1] += As[(threadRow * 8 + 1) * BK + dotIdx] * Breg;
+               threadResults[4] += As[(threadRow * 8 + 4) * BK + dotIdx] * Breg;
+               return;
+}
+
+__global__ void sb_1dwarp_unrolled (int M, int N, int K,
+				int BM, int BN, int BK, 
+                                const float *A, const float *B, float *C) 
+{
+
+  // If we flip x and y here we get ~30% less performance for large matrices.
+  // The current, 30% faster configuration ensures that blocks with sequential
+  // blockIDs access columns of B sequentially, while sharing the same row of A.
+  // The slower configuration would share columns of A, but access into B would
+  // be non-sequential. So the faster configuration has better spatial locality
+  // and hence a greater L2 hit rate.
+  const uint cRow = blockIdx.y;
+  const uint cCol = blockIdx.x;
+
+  const uint totalResultsBlocktile = BM * BN;
+  // A thread is responsible for calculating TM elements in the blocktile
+  const uint numThreadsBlocktile = totalResultsBlocktile / TM;
+
+  // ResultsPerBlock / ResultsPerThread == ThreadsPerBlock
+  assert(numThreadsBlocktile == blockDim.x);
+
+  // each warp will calculate 32*TM elements, with 32 being the columnar dim.
+  const int threadCol = threadIdx.x % BN;
+  const int threadRow = threadIdx.x / BN;
+
+  // allocate space for the current blocktile in SMEM
+    extern __shared__ float sArea [];
+    float* As = sArea;  
+    float* Bs = sArea + BM * BK; 
+
+  // Move blocktile to beginning of A's row and B's column
+  A += cRow * BM * K;
+  B += cCol * BN;
+  C += cRow * BM * N + cCol * BN;
+
+  // todo: adjust this to each thread to load multiple entries and
+  // better exploit the cache sizes
+  const uint innerColA = threadIdx.x % BK; // warp-level GMEM coalescing
+  const uint innerRowA = threadIdx.x / BK;
+  const uint innerColB = threadIdx.x % BN; // warp-level GMEM coalescing
+  const uint innerRowB = threadIdx.x / BN;
+
+  // allocate thread-local cache for results in registerfile
+  float threadResults[TM] = {0.0};
+
+  // make sure 8 results per thread
+  assert(TM == 8);
+
+  // outer loop over block tiles
+  for (uint bkIdx = 0; bkIdx < K; bkIdx += BK) {
+    // populate the SMEM caches
+    As[innerRowA * BK + innerColA] = A[innerRowA * K + innerColA];
+    Bs[innerRowB * BN + innerColB] = B[innerRowB * N + innerColB];
+    __syncthreads();
+
+    // advance blocktile
+    A += BK;
+    B += BK * N;
+
+    // calculate per-thread results
+    for (uint dotIdx = 0; dotIdx < BK; ++dotIdx) {
+      // we make the dotproduct loop the outside loop, which facilitates
+      // reuse of the Bs entry, which we can cache in a tmp var.
+      float tmp = Bs[dotIdx * BN + threadCol];
+      multiply_dense8(threadRow, dotIdx, BK, threadResults, As, tmp);	      		
+    }
+    __syncthreads();
+  }
+
+  // write out the results
+  for (uint resIdx = 0; resIdx < TM; ++resIdx) {
+    C[(threadRow * TM + resIdx) * N + threadCol] = threadResults[resIdx];
+  }
+}
+
+__global__ void sb_1dwarp_unrolled_25p (int M, int N, int K,
+				int BM, int BN, int BK, 
+                                const float *A, const float *B, float *C) 
+{
+
+  // If we flip x and y here we get ~30% less performance for large matrices.
+  // The current, 30% faster configuration ensures that blocks with sequential
+  // blockIDs access columns of B sequentially, while sharing the same row of A.
+  // The slower configuration would share columns of A, but access into B would
+  // be non-sequential. So the faster configuration has better spatial locality
+  // and hence a greater L2 hit rate.
+  const uint cRow = blockIdx.y;
+  const uint cCol = blockIdx.x;
+
+  const uint totalResultsBlocktile = BM * BN;
+  // A thread is responsible for calculating TM elements in the blocktile
+  const uint numThreadsBlocktile = totalResultsBlocktile / TM;
+
+  // ResultsPerBlock / ResultsPerThread == ThreadsPerBlock
+  assert(numThreadsBlocktile == blockDim.x);
+
+  // each warp will calculate 32*TM elements, with 32 being the columnar dim.
+  const int threadCol = threadIdx.x % BN;
+  const int threadRow = threadIdx.x / BN;
+
+  // allocate space for the current blocktile in SMEM
+    extern __shared__ float sArea [];
+    float* As = sArea;  
+    float* Bs = sArea + BM * BK; 
+
+  // Move blocktile to beginning of A's row and B's column
+  A += cRow * BM * K;
+  B += cCol * BN;
+  C += cRow * BM * N + cCol * BN;
+
+  // todo: adjust this to each thread to load multiple entries and
+  // better exploit the cache sizes
+  const uint innerColA = threadIdx.x % BK; // warp-level GMEM coalescing
+  const uint innerRowA = threadIdx.x / BK;
+  const uint innerColB = threadIdx.x % BN; // warp-level GMEM coalescing
+  const uint innerRowB = threadIdx.x / BN;
+
+  // allocate thread-local cache for results in registerfile
+  float threadResults[TM] = {0.0};
+
+  // make sure 8 results per thread
+  assert(TM == 8);
+
+  // outer loop over block tiles
+  for (uint bkIdx = 0; bkIdx < K; bkIdx += BK) {
+    // populate the SMEM caches
+    As[innerRowA * BK + innerColA] = A[innerRowA * K + innerColA];
+    Bs[innerRowB * BN + innerColB] = B[innerRowB * N + innerColB];
+    __syncthreads();
+
+    // advance blocktile
+    A += BK;
+    B += BK * N;
+
+    // calculate per-thread results
+    for (uint dotIdx = 0; dotIdx < BK; ++dotIdx) {
+      // we make the dotproduct loop the outside loop, which facilitates
+      // reuse of the Bs entry, which we can cache in a tmp var.
+      float tmp = Bs[dotIdx * BN + threadCol];
+      multiply_dense8_25p(threadRow, dotIdx, BK, threadResults, As, tmp);	      		
+    }
+    __syncthreads();
+  }
+
+  // write out the results
+  for (uint resIdx = 0; resIdx < TM; ++resIdx) {
+    C[(threadRow * TM + resIdx) * N + threadCol] = threadResults[resIdx];
+  }
+}
 
 #endif
